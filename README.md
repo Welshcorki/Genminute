@@ -74,7 +74,7 @@ AI 기반 회의록 자동 생성 시스템
 ## 프로젝트 구조
 
 ```
-seoulloc/
+genminute/
 ├── app.py                          # Flask 애플리케이션 진입점
 ├── config.py                       # 중앙 집중식 설정 관리
 ├── init_db.py                      # 데이터베이스 초기화 스크립트

@@ -527,7 +527,9 @@ def upload_and_process():
             yield f"data: {json.dumps({'step': 'complete', 'message': '노트 생성이 완료되었습니다!', 'redirect': redirect_url, 'icon': '✅'})}\n\n"
         
         except Exception as e:
+            error_msg = f"처리 중 오류가 발생했습니다: {str(e)}"
             logger.error(f"❌ 업로드 처리 실패: {e}", exc_info=True)
+            yield f"data: {json.dumps({'step': 'error', 'message': error_msg})}\n\n"
 
             # 임시 파일 정리
             if temp_audio_path:

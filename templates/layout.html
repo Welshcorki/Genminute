@@ -9,14 +9,35 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
+    <!-- Mobile Menu Overlay -->
+    <div class="mobile-overlay" id="mobile-overlay"></div>
+
+    <!-- Mobile Header (Visible only on mobile) -->
+    <header class="mobile-header">
+        <button id="mobile-menu-btn" class="mobile-menu-btn">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <div class="mobile-logo">
+            <img src="{{ url_for('static', filename='image/logo.png') }}" alt="GenMinute Logo">
+        </div>
+        <!-- Spacer for right side balance if needed -->
+        <div style="width: 40px;"></div> 
+    </header>
+
     <div class="app-container">
-        <nav class="main-nav">
+        <nav class="main-nav" id="main-nav">
+            <!-- Mobile Close Button -->
+            <button id="mobile-menu-close-btn" class="mobile-menu-close-btn">
+                <i class="fa-solid fa-times"></i>
+            </button>
+
             <div class="nav-logo">
                 <img src="{{ url_for('static', filename='image/logo.png') }}" alt="GenMinute Logo">
             </div>
             <ul class="nav-menu">
                 <li class="nav-header">Meeting</li>
                 <li class="nav-item" data-page="index"><a href="{{ url_for('meetings.index') }}"><i class="fa-solid fa-plus"></i> 새노트 만들기</a></li>
+                <li class="nav-item" data-page="record"><a href="{{ url_for('live.recorder') }}"><i class="fa-solid fa-microphone-lines"></i> 실시간 녹음</a></li>
                 <li class="nav-item" data-page="list_notes"><a href="{{ url_for('meetings.notes') }}"><i class="fa-solid fa-folder-open"></i> 노트 보기</a></li>
                 <li class="nav-item" data-page="shared_notes"><a href="{{ url_for('meetings.shared_notes') }}"><i class="fa-solid fa-share-nodes"></i> 공유 노트 보기</a></li>
                 {% if is_admin %}
@@ -98,6 +119,7 @@
             // 경로와 data-page 매핑
             const pathMapping = {
                 '/': 'index',
+                '/record': 'record',
                 '/notes': 'list_notes',
                 '/shared-notes': 'shared_notes',
                 '/script-input': 'script_input_page',

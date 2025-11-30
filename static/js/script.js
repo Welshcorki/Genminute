@@ -56,6 +56,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // 챗봇 상태 복원 함수
     function restoreChatbotState() {
         const savedState = sessionStorage.getItem(CHATBOT_STATE_KEY);
+        const isMobile = window.innerWidth <= 768;
+
+        // 모바일에서는 자동 열림 방지 (저장된 상태 무시하고 닫힘으로 시작)
+        if (isMobile) {
+            console.log('📱 모바일 환경 감지: 챗봇 자동 열림 방지');
+            // 상태를 'closed'로 덮어쓰지는 않음 (데스크탑 복귀 시 유지 위해)
+            // 하지만 UI는 닫힌 상태로 시작
+            return;
+        }
 
         // 명시적으로 닫힌 상태가 아니면 열린 상태로 시작 (기본값: 열림)
         if (savedState !== 'closed') {
@@ -93,6 +102,45 @@ document.addEventListener('DOMContentLoaded', () => {
             // 명시적으로 닫힌 상태인 경우에만 닫힌 상태 유지
             console.log('ℹ️ 챗봇 닫힘 상태 유지');
         }
+    }
+
+    // === 모바일 메뉴 제어 ===
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenuCloseBtn = document.getElementById('mobile-menu-close-btn');
+    const mainNav = document.getElementById('main-nav');
+    const mobileOverlay = document.getElementById('mobile-overlay');
+
+    if (mobileMenuBtn && mainNav && mobileOverlay) {
+        // 메뉴 열기
+        mobileMenuBtn.addEventListener('click', () => {
+            mainNav.classList.add('active');
+            mobileOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
+        });
+
+        // 메뉴 닫기 함수
+        const closeMobileMenu = () => {
+            mainNav.classList.remove('active');
+            mobileOverlay.classList.remove('active');
+            document.body.style.overflow = ''; // 스크롤 복원
+        };
+
+        // 닫기 버튼 클릭 시
+        if (mobileMenuCloseBtn) {
+            mobileMenuCloseBtn.addEventListener('click', closeMobileMenu);
+        }
+
+        // 오버레이 클릭 시 (메뉴 바깥 클릭)
+        mobileOverlay.addEventListener('click', closeMobileMenu);
+
+        // 메뉴 아이템 클릭 시 자동으로 닫기 (페이지 이동 시)
+        const navLinks = mainNav.querySelectorAll('a');
+        navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                // 현재 페이지가 아닌 경우에만 닫기 (SPA가 아니므로 페이지 이동 발생)
+                closeMobileMenu();
+            });
+        });
     }
 
     // 메시지 전송 (Enter 키)

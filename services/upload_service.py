@@ -70,7 +70,7 @@ class UploadService:
 
         # 비디오 파일 여부 확인
         extension = original_filename.rsplit('.', 1)[1].lower()
-        is_video = (extension == 'mp4')
+        is_video = (extension in ['mp4', 'webm'])
 
         print(f"✅ 파일 저장: {file_path} (비디오: {is_video})")
 
@@ -103,6 +103,7 @@ class UploadService:
             ]
 
             # 실행 (20분 타임아웃)
+            print(f"ffmpeg 명령어 실행: {' '.join(command)}")
             result = subprocess.run(
                 command,
                 capture_output=True,
@@ -111,6 +112,12 @@ class UploadService:
                 errors='ignore',
                 timeout=config.UPLOAD_TIMEOUT_SECONDS
             )
+
+            # 디버깅을 위한 상세 로그
+            if result.stdout:
+                print(f"[ffmpeg stdout] {result.stdout[:500]}") # 너무 길면 자름
+            if result.stderr:
+                print(f"[ffmpeg stderr] {result.stderr[:500]}")
 
             if result.returncode == 0:
                 print(f"✅ 비디오 → 오디오 변환 성공: {audio_path}")

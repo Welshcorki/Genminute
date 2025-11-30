@@ -8,24 +8,25 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def register_blueprints(app: Flask):
+from .auth import auth_bp
+from .meetings import meetings_bp
+from .chat import chat_bp
+from .summary import summary_bp
+from .admin import admin_bp
+from .live_record import live_bp
+
+
+def register_blueprints(app):
     """
-    모든 Blueprint를 Flask 앱에 등록합니다.
+    애플리케이션에 모든 Blueprint 등록
 
     Args:
         app: Flask 애플리케이션 인스턴스
     """
-    from .auth import auth_bp
-    from .meetings import meetings_bp
-    from .summary import summary_bp
-    from .chat import chat_bp
-    from .admin import admin_bp
-
-    # Blueprint 등록
     app.register_blueprint(auth_bp)
     app.register_blueprint(meetings_bp)
+    app.register_blueprint(chat_bp, url_prefix='/api')
     app.register_blueprint(summary_bp)
-    app.register_blueprint(chat_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(live_bp)
 
-    logger.info("✅ 모든 Blueprint 등록 완료")

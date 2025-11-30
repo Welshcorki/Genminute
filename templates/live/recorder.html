@@ -1,0 +1,218 @@
+{% extends "layout.html" %}
+
+{% block title %}GenMinute - 실시간 녹음{% endblock %}
+
+{% block content %}
+<div class="content-panel">
+    <div class="content-header">
+        <h1>실시간 회의 녹음</h1>
+    </div>
+
+    <div class="recorder-container" style="max-width: 800px; margin: 0 auto;">
+        
+        <!-- 탭 네비게이션 -->
+        <div class="tabs-container">
+            <button class="tab-button active" data-tab="mic-tab">
+                <i class="fa-solid fa-microphone"></i> 마이크 녹음 (모바일/대면)
+            </button>
+            <button class="tab-button" data-tab="system-tab">
+                <i class="fa-solid fa-desktop"></i> PC 시스템 오디오 (Zoom/화상회의)
+            </button>
+        </div>
+
+        <!-- 마이크 녹음 탭 -->
+        <div id="mic-tab" class="tab-content active">
+            <div class="recorder-card">
+                <div class="recorder-status">
+                    <div class="status-icon"><i class="fa-solid fa-microphone-lines"></i></div>
+                    <div class="status-text" id="mic-status-text">녹음 준비 완료</div>
+                    <div class="timer" id="mic-timer">00:00:00</div>
+                </div>
+                
+                <div class="visualizer-container">
+                    <canvas id="mic-visualizer"></canvas>
+                </div>
+
+                <div class="controls">
+                    <button id="btn-start-mic" class="btn-record start">
+                        <i class="fa-solid fa-circle"></i> 녹음 시작
+                    </button>
+                    <button id="btn-stop-mic" class="btn-record stop" disabled>
+                        <i class="fa-solid fa-stop"></i> 녹음 종료 & 분석
+                    </button>
+                </div>
+                
+                <p class="help-text">
+                    <i class="fa-solid fa-circle-info"></i> 스마트폰이나 노트북의 마이크를 사용하여 현장 회의를 녹음합니다.
+                </p>
+            </div>
+        </div>
+
+        <!-- 시스템 오디오 탭 -->
+        <div id="system-tab" class="tab-content">
+            <div class="recorder-card">
+                <div class="recorder-status">
+                    <div class="status-icon"><i class="fa-solid fa-computer"></i></div>
+                    <div class="status-text" id="sys-status-text">녹음 준비 완료</div>
+                    <div class="timer" id="sys-timer">00:00:00</div>
+                </div>
+
+                <div class="visualizer-container">
+                    <canvas id="sys-visualizer"></canvas>
+                </div>
+
+                <div class="controls">
+                    <button id="btn-start-sys" class="btn-record start">
+                        <i class="fa-solid fa-circle"></i> PC 오디오 캡처 시작
+                    </button>
+                    <button id="btn-stop-sys" class="btn-record stop" disabled>
+                        <i class="fa-solid fa-stop"></i> 녹음 종료 & 분석
+                    </button>
+                </div>
+
+                <div class="guide-box">
+                    <h4><i class="fa-solid fa-triangle-exclamation"></i> 사용 전 필독</h4>
+                    <ol>
+                        <li>'캡처 시작' 버튼을 누르면 화면 공유 팝업이 뜹니다.</li>
+                        <li><strong>'전체 화면'</strong> 또는 <strong>'브라우저 탭'</strong>을 선택하세요. (Zoom 창 선택 시 소리가 안 날 수 있음)</li>
+                        <li>하단의 <strong>'시스템 오디오 공유'</strong> 체크박스를 반드시 켜주세요!</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- 공통: 제목 입력 및 업로드 폼 (숨겨짐) -->
+        <div class="upload-section" id="upload-section" style="display: none; margin-top: 2rem;">
+            <h3><i class="fa-solid fa-floppy-disk"></i> 회의 저장 및 분석</h3>
+            <div class="form-group">
+                <label for="meeting-title">회의 제목</label>
+                <input type="text" id="meeting-title" placeholder="예: 주간 업무 보고 회의" class="form-control">
+            </div>
+            <div class="upload-actions">
+                <button id="btn-upload" class="btn-primary">
+                    <i class="fa-solid fa-upload"></i> 분석 시작하기
+                </button>
+                <button id="btn-cancel" class="btn-secondary">취소</button>
+            </div>
+            <audio id="audio-preview" controls style="width: 100%; margin-top: 1rem;"></audio>
+        </div>
+
+    </div>
+</div>
+
+<!-- 스타일 추가 -->
+<style>
+    .recorder-card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        text-align: center;
+        border: 1px solid var(--border-color);
+    }
+
+    .recorder-status {
+        margin-bottom: 2rem;
+    }
+
+    .status-icon {
+        font-size: 3rem;
+        color: #ccc;
+        margin-bottom: 1rem;
+        transition: color 0.3s;
+    }
+    .recording .status-icon { color: #e74c3c; animation: pulse-red 1.5s infinite; }
+
+    .timer {
+        font-size: 2.5rem;
+        font-family: monospace;
+        font-weight: bold;
+        color: var(--nav-bg);
+    }
+
+    .visualizer-container {
+        width: 100%;
+        height: 120px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        overflow: hidden;
+        border: 1px solid #eee;
+    }
+    
+    canvas {
+        width: 100%;
+        height: 100%;
+    }
+
+    .btn-record {
+        border: none;
+        border-radius: 50px;
+        padding: 1rem 2.5rem;
+        font-size: 1.1rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .btn-record.start {
+        background: #e74c3c;
+        color: white;
+        box-shadow: 0 4px 10px rgba(231, 76, 60, 0.3);
+    }
+    .btn-record.start:hover { background: #c0392b; transform: translateY(-2px); }
+
+    .btn-record.stop {
+        background: #34495e;
+        color: white;
+    }
+    .btn-record:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .guide-box {
+        margin-top: 2rem;
+        background: #fff3cd;
+        border: 1px solid #ffeeba;
+        padding: 1.5rem;
+        border-radius: 8px;
+        text-align: left;
+        color: #856404;
+    }
+    .guide-box h4 { margin-top: 0; }
+    .guide-box ol { padding-left: 1.5rem; margin-bottom: 0; }
+    .guide-box li { margin-bottom: 0.5rem; }
+
+    @keyframes pulse-red {
+        0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
+        70% { box-shadow: 0 0 0 15px rgba(231, 76, 60, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 1rem;
+        margin-top: 0.5rem;
+    }
+    
+    .upload-actions {
+        margin-top: 1.5rem;
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/live/recorder.js') }}"></script>
+{% endblock %}

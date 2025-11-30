@@ -1084,3 +1084,158 @@ body {
 .speaker-share-modal-body canvas {
     max-height: 400px;
 }
+
+/* ==================== Mobile Responsive ==================== */
+.mobile-header {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background-color: var(--nav-bg);
+    color: white;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    height: 60px;
+}
+
+.mobile-menu-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
+.mobile-logo {
+    height: 32px;
+}
+
+.mobile-logo img {
+    height: 100%;
+    width: auto;
+}
+
+.mobile-menu-close-btn {
+    display: none;
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    color: var(--nav-text);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.mobile-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .app-container {
+        display: block;
+        height: auto;
+        min-height: 100vh;
+        padding-top: 60px; /* Mobile header height */
+    }
+
+    .mobile-header {
+        display: flex;
+    }
+
+    .main-nav {
+        position: fixed;
+        top: 0;
+        left: -280px; /* Hide by default */
+        width: 280px;
+        height: 100vh;
+        z-index: 1001;
+        transition: left 0.3s ease-in-out;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+    }
+
+    .main-nav.active {
+        left: 0;
+    }
+
+    .mobile-menu-close-btn {
+        display: block;
+    }
+
+    .content-wrapper {
+        width: 100%;
+        margin-right: 0 !important; /* Override JS inline style if any */
+    }
+    
+    .app-container.chatbot-open .content-wrapper {
+        margin-right: 0;
+    }
+
+    /* Chatbot on Mobile */
+    .chatbot-sidebar {
+        width: 100%;
+        max-width: 100%;
+        right: -100%; /* Hide completely */
+    }
+
+    .chatbot-sidebar.open {
+        right: 0;
+        transform: none; /* Use right property for animation */
+    }
+
+    .chatbot-toggle-tab {
+        width: 35px;
+        height: 100px;
+        font-size: 0.7rem;
+        transform: translateY(-50%) translateX(0); /* Always visible */
+        right: 0;
+    }
+    
+    /* Adjust content padding */
+    .content-panel, 
+    .viewer-container,
+    .minutes-container,
+    .summary-container {
+        padding: 1rem;
+        height: auto;
+        min-height: calc(100vh - 100px);
+    }
+
+    /* Adjust Grid/Flex layouts */
+    .viewer-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .viewer-header h1 {
+        font-size: 1.5rem;
+    }
+
+    /* Hide nav logo in sidebar since it's in header */
+    .nav-logo {
+        display: none;
+    }
+    
+    .nav-header:first-of-type {
+        margin-top: 3rem; /* Space for close button */
+    }
+}
