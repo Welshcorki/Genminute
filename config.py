@@ -44,7 +44,7 @@ class Config:
     GOOGLE_API_KEY: str = os.getenv('GOOGLE_API_KEY', '')
 
     # ==================== 파일 업로드 설정 ====================
-    ALLOWED_EXTENSIONS: Set[str] = {"wav", "mp3", "m4a", "flac", "mp4"}
+    ALLOWED_EXTENSIONS: Set[str] = {"wav", "mp3", "m4a", "flac", "mp4", "webm"}
     MAX_FILE_SIZE_MB: int = 500
     UPLOAD_TIMEOUT_SECONDS: int = 1200  # 20분
 

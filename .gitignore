@@ -2,6 +2,8 @@
 **.m4a
 **.mp3
 **.mp4
+**.webm
+uploads/
 vector_db/
 **.db
 ngrok.exe

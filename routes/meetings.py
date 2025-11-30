@@ -466,34 +466,61 @@ def upload_and_process():
     
     # SSE Generator 함수
     def generate():
+        nonlocal file_path, is_video # 바깥 범위 변수 수정 허용
         temp_audio_path = None
         
         try:
+            logger.info("🚀 SSE 생성 시작")
             # Step 1: 파일 업로드 완료
             yield f"data: {json.dumps({'step': 'upload', 'message': '파일 업로드가 완료되었습니다...', 'icon': '📤'})}\n\n"
             
-            # Step 2: 비디오 변환 (필요 시)
+            # [추가] WebM -> 호환 포맷 자동 변환 (MP4/M4A)
+            if file_path.lower().endswith('.webm'):
+                logger.info("🔄 WebM 파일 감지 -> 호환 포맷 변환 시작")
+                yield f"data: {json.dumps({'step': 'convert', 'message': '호환성을 위해 파일 형식을 변환 중...', 'icon': '🔄'})}\n\n"
+                
+                success, new_path, error_msg = upload_service.convert_webm_to_compatible_format(file_path)
+                if not success:
+                    logger.error(f"❌ 포맷 변환 실패: {error_msg}")
+                    yield f"data: {json.dumps({'step': 'error', 'message': f'파일 형식 변환 실패: {error_msg}'})}\n\n"
+                    return
+                
+                # 경로 업데이트
+                file_path = new_path
+                # MP4인 경우에만 비디오로 취급
+                is_video = file_path.lower().endswith('.mp4')
+                logger.info(f"✅ 변환 완료: {file_path} (is_video={is_video})")
+
+            # Step 2: 비디오 변환 (MP4에서 오디오 추출)
             audio_path_for_stt = file_path
             if is_video:
+                logger.info("🎬 비디오 오디오 추출 단계 진입")
                 yield f"data: {json.dumps({'step': 'convert', 'message': '비디오를 오디오로 변환 중...', 'icon': '🎬'})}\n\n"
                 
                 success, temp_audio_path, error_msg = upload_service.convert_video_to_audio(file_path)
                 if not success:
-                    yield f"data: {json.dumps({'step': 'error', 'message': f'비디오 변환 실패: {error_msg}'})}\n\n"
+                    logger.error(f"❌ 비디오 오디오 추출 실패: {error_msg}")
+                    yield f"data: {json.dumps({'step': 'error', 'message': f'오디오 추출 실패: {error_msg}'})}\n\n"
                     return
                 
                 audio_path_for_stt = temp_audio_path
+                logger.info(f"✅ 오디오 추출 완료: {temp_audio_path}")
             
             # Step 3: STT 처리
+            logger.info(f"🎤 STT 처리 단계 진입: {audio_path_for_stt}")
             yield f"data: {json.dumps({'step': 'stt', 'message': '회의 음성을 텍스트로 변환하고 있습니다...', 'icon': '🎤'})}\n\n"
             
+            # [수정] DB에는 최종 변환된 파일명(file_path)을 저장해야 함
+            # STT 분석은 오디오 추출된 파일(audio_path_for_stt)로 수행
             result = upload_service.process_audio_file(
                 audio_path=audio_path_for_stt,
                 meeting_id=meeting_id,
                 title=title,
                 meeting_date=meeting_date,
-                owner_id=owner_id
+                owner_id=owner_id,
+                original_filename=os.path.basename(file_path)
             )
+            logger.info(f"✅ STT 처리 결과: {result}")
 
             if not result['success']:
                 yield f"data: {json.dumps({'step': 'error', 'message': 'STT 처리 실패'})}\n\n"

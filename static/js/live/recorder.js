@@ -363,9 +363,32 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // 현재 활성화된 탭 확인 (파일명 접두어 결정을 위해)
+        const activeTab = document.querySelector('.tab-button.active');
+        const isSystemRecord = activeTab && activeTab.dataset.tab === 'system-tab';
+        
+        // 접두어 설정: 마이크는 'mic', 시스템(화상회의)은 'video'
+        const prefix = isSystemRecord ? 'video' : 'mic';
+
+        // 날짜/시간 포맷팅 (YYYYMMDD_HHMMSS)
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const timestampStr = `${year}${month}${day}_${hours}${minutes}${seconds}`;
+
+        // 제목 정제 (파일명에 쓸 수 없는 문자 제거 및 공백을 언더바(_)로 치환)
+        // 허용: 한글, 영문, 숫자, 언더바(_), 하이픈(-)
+        const sanitizedTitle = title.replace(/[^a-zA-Z0-9가-힣\-_]/g, '_');
+
+        // 최종 파일명 생성: [타입]_[날짜시간]_[제목].webm
+        const filename = `${prefix}_${timestampStr}_${sanitizedTitle}.webm`;
+
         // FormData 생성
         const formData = new FormData();
-        const filename = `record_${Date.now()}.webm`; // WebM으로 전송
         formData.append('audio_file', recordedBlob, filename);
         formData.append('title', title);
 

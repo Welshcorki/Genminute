@@ -26,6 +26,7 @@ exceptiongroup
 executing
 filelock==3.20.0
 Flask==3.1.2
+Flask-SocketIO==5.5.1
 flatbuffers==25.9.23
 frozenlist==1.8.0
 fsspec==2025.10.0

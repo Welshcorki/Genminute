@@ -78,8 +78,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 파일 확장자 확인하여 비디오/오디오 플레이어 선택
             const audioUrl = data.audio_url;
-            const fileExtension = audioUrl.split('.').pop().toLowerCase();
+            // URL에서 쿼리 스트링 제거 후 확장자 추출 (안전성 강화)
+            const cleanUrl = audioUrl.split('?')[0]; 
+            const fileExtension = cleanUrl.split('.').pop().toLowerCase();
 
+            // [수정] 서버에서 비디오는 무조건 mp4로 변환하므로 확장자만 확인하면 됨
             if (fileExtension === 'mp4') {
                 // 비디오 파일인 경우 비디오 플레이어 사용
                 videoPlayer.src = audioUrl;
@@ -88,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentPlayer = videoPlayer;
                 console.log('🎬 비디오 플레이어 활성화');
             } else {
-                // 오디오 파일인 경우 오디오 플레이어 사용
+                // 그 외(m4a, mp3, wav 등)는 오디오 플레이어 사용
                 audioPlayer.src = audioUrl;
                 audioPlayer.style.display = 'block';
                 videoPlayer.style.display = 'none';

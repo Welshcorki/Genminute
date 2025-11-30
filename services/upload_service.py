@@ -137,23 +137,154 @@ class UploadService:
             print(f"❌ {error_msg}")
             return False, "", error_msg
 
+    def convert_webm_to_compatible_format(self, webm_path: str) -> tuple[bool, str, str]:
+        """
+        WebM 파일을 호환성 높은 포맷으로 변환
+        - 비디오 녹화(video_) -> MP4 (H.264/AAC)
+        - 마이크 녹음(mic_) -> M4A (AAC 오디오 전용)
+        
+        Args:
+            webm_path: WebM 파일 경로
+            
+        Returns:
+            (success, new_path, error_message): 변환 결과
+        """
+        try:
+            filename = os.path.basename(webm_path)
+            is_video_record = 'video_' in filename
+            
+            if is_video_record:
+                # 비디오 녹화 -> MP4 변환
+                target_ext = '.mp4'
+                command = [
+                    'ffmpeg', '-y', '-i', webm_path,
+                    '-c:v', 'libx264', '-preset', 'fast',
+                    '-c:a', 'aac',
+                    # 출력 파일 경로 설정 (아래에서 추가)
+                ]
+                print(f"🔄 WebM(Video) → MP4 변환 시작: {webm_path}")
+            else:
+                # 마이크 녹음 -> M4A (AAC) 변환
+                target_ext = '.m4a'
+                command = [
+                    'ffmpeg', '-y', '-i', webm_path,
+                    '-vn', # 비디오 스트림 제거
+                    '-c:a', 'aac',
+                    # 출력 파일 경로 설정 (아래에서 추가)
+                ]
+                print(f"🔄 WebM(Mic) → M4A 변환 시작: {webm_path}")
+
+            # 출력 파일 경로 생성
+            new_path = webm_path.rsplit('.', 1)[0] + target_ext
+            command.append(new_path)
+            
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='ignore',
+                timeout=config.UPLOAD_TIMEOUT_SECONDS
+            )
+            
+            if result.returncode == 0:
+                print(f"✅ 변환 성공: {new_path}")
+                # 원본 WebM 삭제
+                try:
+                    os.remove(webm_path)
+                    print("🗑️ 원본 WebM 파일 삭제됨")
+                except:
+                    pass
+                    
+                return True, new_path, ""
+            else:
+                error_msg = f"ffmpeg 변환 실패: {result.stderr}"
+                print(f"❌ {error_msg}")
+                return False, "", error_msg
+                
+        except Exception as e:
+            error_msg = f"변환 중 오류: {str(e)}"
+            print(f"❌ {error_msg}")
+            return False, "", error_msg
+
+    def convert_webm_to_mp4(self, webm_path: str) -> tuple[bool, str, str]:
+        """
+        WebM 파일을 MP4로 변환 (호환성 확보)
+        
+        Args:
+            webm_path: WebM 파일 경로
+            
+        Returns:
+            (success, mp4_path, error_message): 변환 결과
+        """
+        try:
+            # 출력 파일 경로 (확장자만 mp4로 변경)
+            mp4_path = webm_path.rsplit('.', 1)[0] + '.mp4'
+            
+            # ffmpeg 명령어 (Fast Encoding)
+            # -c:v libx264: H.264 비디오 코덱 (호환성 좋음)
+            # -preset fast: 인코딩 속도 우선
+            # -c:a aac: AAC 오디오 코덱
+            command = [
+                'ffmpeg',
+                '-y',
+                '-i', webm_path,
+                '-c:v', 'libx264',
+                '-preset', 'fast',
+                '-c:a', 'aac',
+                mp4_path
+            ]
+            
+            print(f"🔄 WebM → MP4 변환 시작: {webm_path}")
+            
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='ignore',
+                timeout=config.UPLOAD_TIMEOUT_SECONDS
+            )
+            
+            if result.returncode == 0:
+                print(f"✅ WebM → MP4 변환 성공: {mp4_path}")
+                # 원본 WebM 삭제 (선택 사항, 여기서는 용량 절약을 위해 삭제)
+                try:
+                    os.remove(webm_path)
+                    print("🗑️ 원본 WebM 파일 삭제됨")
+                except:
+                    pass
+                    
+                return True, mp4_path, ""
+            else:
+                error_msg = f"ffmpeg 변환 실패: {result.stderr}"
+                print(f"❌ {error_msg}")
+                return False, "", error_msg
+                
+        except Exception as e:
+            error_msg = f"MP4 변환 중 오류: {str(e)}"
+            print(f"❌ {error_msg}")
+            return False, "", error_msg
+
     def process_audio_file(
         self,
         audio_path: str,
         meeting_id: str,
         title: str,
         meeting_date: str,
-        owner_id: int
+        owner_id: int,
+        original_filename: str = None  # [추가] 원본 파일명 (임시 파일명 대신 저장용)
     ) -> dict:
         """
         오디오 파일 STT 처리 및 DB 저장
 
         Args:
-            audio_path: 오디오 파일 경로
+            audio_path: STT 분석할 오디오 파일 경로 (임시 wav일 수 있음)
             meeting_id: 회의 ID
             title: 회의 제목
             meeting_date: 회의 날짜
             owner_id: 소유자 ID
+            original_filename: DB에 저장할 실제 원본 파일명 (MP4/M4A 등)
 
         Returns:
             dict: 처리 결과 (segments, meeting_id 등)
@@ -168,7 +299,12 @@ class UploadService:
         print(f"✅ STT 완료: {len(segments)}개 세그먼트")
 
         # SQLite DB 저장
-        audio_filename = os.path.basename(audio_path)
+        # original_filename이 있으면 그것을 사용, 없으면 audio_path에서 추출
+        if original_filename:
+            audio_filename = original_filename
+        else:
+            audio_filename = os.path.basename(audio_path)
+            
         saved_meeting_id = self.db.save_stt_to_db(
             segments=segments,
             audio_filename=audio_filename,
