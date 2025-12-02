@@ -42,6 +42,7 @@ class Config:
     # ==================== API 키 ====================
     OPENAI_API_KEY: str = os.getenv('OPENAI_API_KEY', '')
     GOOGLE_API_KEY: str = os.getenv('GOOGLE_API_KEY', '')
+    HF_TOKEN: str = os.getenv('HUGGINGFACEHUB_API_TOKEN', '') or os.getenv('HF_TOKEN', '')
 
     # ==================== 파일 업로드 설정 ====================
     ALLOWED_EXTENSIONS: Set[str] = {"wav", "mp3", "m4a", "flac", "mp4", "webm"}
