@@ -92,3 +92,35 @@
     *   **사용자 경험 개선:** 파일 다운로드 시 `Content-Disposition` 헤더를 활용하여 사용자가 지정한 제목(`날짜_제목.mp4`)으로 파일이 저장되도록 구현.
     *   **확장성 확보:** DB 스키마에 `series_id` 등을 추가하여, 파일명 의존 없이 DB 관계(Relation)를 통해 '시리즈 회의' 묶기 기능 구현.
 *   **OpenAI API 이슈 해결 (보류):** 벡터 임베딩 생성 시 간헐적인 429 에러가 발생했으나 현재는 정상 작동 중이므로, 추후 Gemini 임베딩 모델로의 전환 등 근본적인 해결책을 적용할 예정.
+
+---
+
+📝 2025-12-02 개발 일지 (Gemini 작업분)
+
+  1. 로컬 STT 및 화자 분리 시스템 구축 (feat/local-stt)
+   * 목표: 외부 API 의존도를 줄이고, 로컬 환경에서 STT(Whisper)와 화자 분리(Pyannote)를 수행하는 모듈 개발.
+   * 성과:
+       * services/diarization.py 모듈 구현 완료.
+       * Faster-Whisper (STT) + Pyannote.audio (Diarization) 통합 파이프라인 구축.
+       * FFmpeg를 활용한 자동 오디오 전처리 (WebM/MP4 → 16kHz Mono WAV) 로직 구현으로 호환성 확보.
+
+  2. 의존성 충돌 해결 (Dependency Resolution)
+   * 문제: pyannote.audio 3.3.1이 사용하는 구형 API(use_auth_token)가 최신 huggingface_hub에서 제거되어 에러 발생.
+   * 해결:
+       * huggingface_hub 버전을 0.19.4로 다운그레이드하여 호환성 확보.
+       * numpy < 2.0 및 torch 2.5.1 등 안정적인 버전 조합(Golden Set) 도출.
+       * experiments_stt/requirements_stt.txt에 검증된 의존성 명시.
+
+  3. 코드 병합 준비 (Conflict Prevention)
+   * 상황: 다른 AI 작업분(캘린더 연동 기능)과의 충돌 방지 필요.
+   * 조치:
+       * 메인 로직 파일(upload_service.py)을 직접 수정하지 않고, experiments_stt/upload_service.py에 병합용 수정본을
+         별도 생성.
+       * 나중에 Git Merge 시 이 파일을 참고하여 로직만 교체하도록 가이드 마련.
+
+  4. 주요 생성 파일
+   * services/diarization.py: 핵심 서비스 로직.
+   * experiments_stt/: 실험 및 병합 준비용 격리 폴더.
+   * test_diarization_service.py: 서비스 검증용 테스트 스크립트.
+
+  ---
