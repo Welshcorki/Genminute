@@ -34,3 +34,30 @@
 - `AgentService`가 단일 Action Item만 처리하는 한계를 개선.
 - 실제 Google Calendar API OAuth 2.0 연동 및 사용자 승인 플로우 구현.
 - 에이전트의 처리 결과를 사용자에게 시각적으로 피드백하는 UI 구현.
+
+---
+## 2025-12-02 (추가): Google Calendar 연동 파이프라인 구축
+
+### 목표
+- 실제 Google Calendar API 연동을 위한 사용자 인증(OAuth 2.0) 기반 마련 및 실제 API 호출 기능 구현.
+
+### 주요 변경 사항
+1. **Google OAuth 2.0 설정:**
+   - `.env` 및 `config.py`에 Google OAuth 2.0 클라이언트 ID 및 보안 비밀을 환경 변수로 추가.
+   - `init_db.py`의 `users` 테이블 스키마에 인증 정보 저장을 위한 `google_auth_credentials_json` 컬럼 추가.
+   - `init_db.py`의 `print` 구문을 `logging` 모듈로 대체하여 유니코드 인코딩 오류 해결.
+
+2. **사용자 인증 흐름 구현:**
+   - Google 인증을 시작(`.../start`)하고 콜백(`.../oauth2callback`)을 처리하는 `routes/google_auth.py` 블루프린트 생성 및 등록.
+   - `utils/db_manager.py`에 사용자 인증 정보를 DB에 저장하고 조회하는 함수 추가.
+   - `templates/notes.html`에 인증 시작을 위한 'Google Calendar 연동' 버튼 UI 추가.
+   - 개발 환경의 HTTP 연결에서 발생하는 `InsecureTransportError` 해결을 위해 `OAUTHLIB_INSECURE_TRANSPORT` 환경 변수 설정.
+
+3. **실제 API 연동 구현:**
+   - `tools/google_calendar_tool.py`의 시뮬레이션 함수를 실제 Google Calendar API(`service.events().insert()`)를 호출하는 코드로 교체.
+   - `agent_service.py`와 `upload_service.py`를 수정하여, `user_id`를 도구 함수까지 전달하는 파이프라인 완성.
+
+### 결과
+- 사용자가 UI를 통해 Google 계정 접근 권한을 승인하고, 발급된 인증 토큰(Refresh Token)을 데이터베이스에 안전하게 저장하는 전체 인증 파이프라인 구축 완료.
+- `redirect_uri_mismatch` 및 `InsecureTransportError` 등 OAuth 2.0 연동 과정에서 발생한 주요 오류 해결.
+- AI 에이전트가 실제 사용자 계정의 캘린더에 접근하여 일정을 생성할 수 있는 모든 기술적 기반이 마련됨.

@@ -30,6 +30,9 @@ class AgentState(TypedDict):
     
     # 처리 완료된 Action Item들을 저장
     processed_items: List[Dict]
+    
+    # 이 워크플로우를 시작한 사용자의 ID
+    user_id: int
 
 
 # --- 2. 노드 정의 (Node Definition) ---
@@ -97,7 +100,11 @@ class AgentService:
                     try:
                         # Pydantic 모델로 인자 유효성 검사
                         event = CalendarEvent(**tool_args)
-                        add_calendar_event.invoke(event.dict())
+                        
+                        # user_id를 포함하여 실제 도구 호출
+                        tool_kwargs = event.dict()
+                        tool_kwargs['user_id'] = state['user_id']
+                        add_calendar_event.invoke(tool_kwargs)
                         
                         # 처리된 아이템을 임시 리스트에 추가
                         processed_in_this_turn.append(event.dict())
@@ -112,7 +119,7 @@ class AgentService:
         # 도구를 사용하지 않은 경우, 단순 메시지만 업데이트
         return {"messages": new_messages}
 
-    def process(self, meeting_text: str):
+    def process(self, meeting_text: str, user_id: int):
         """
         주어진 회의록 텍스트에 대해 Action Item 추출 및 처리를 시작합니다.
         """
@@ -136,7 +143,8 @@ class AgentService:
             "current_date": current_date,
             "messages": [HumanMessage(content=prompt)],
             "extracted_items": [],
-            "processed_items": []
+            "processed_items": [],
+            "user_id": user_id
         }
         
         # 그래프 실행

@@ -333,8 +333,9 @@ class UploadService:
         # [통합] Action Item 추출을 위해 AgentService 호출
         try:
             print(f"🤖 Action Item 추출 에이전트 호출 시작 (meeting_id: {saved_meeting_id})")
-            full_transcript = " ".join([s['segment'] for s in segments])
-            self.agent_service.process(full_transcript)
+            full_transcript = " ".join([s['text'] for s in segments])
+            # process 메서드에 user_id 전달
+            self.agent_service.process(full_transcript, owner_id)
             print(f"✅ Action Item 추출 에이전트 호출 완료 (meeting_id: {saved_meeting_id})")
         except Exception as e:
             print(f"⚠️ Action Item 추출 에이전트 호출 중 오류 발생: {e}")

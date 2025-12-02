@@ -765,3 +765,58 @@ class DatabaseManager:
         conn.close()
 
         return deleted_count
+
+    def update_user_google_credentials(self, user_id: int, credentials_json: str):
+        """
+        사용자의 Google OAuth 2.0 인증 정보를 DB에 저장(업데이트)합니다.
+
+        Args:
+            user_id (int): 사용자 ID
+            credentials_json (str): 직렬화된 인증 정보 (JSON 문자열)
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            # users 테이블에 google_auth_credentials_json 컬럼이 없으면 추가
+            cursor.execute("PRAGMA table_info(users)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'google_auth_credentials_json' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN google_auth_credentials_json TEXT")
+                logger.info("✅ 'users' 테이블에 'google_auth_credentials_json' 컬럼 추가 완료")
+
+            cursor.execute("""
+                UPDATE users
+                SET google_auth_credentials_json = ?
+                WHERE id = ?
+            """, (credentials_json, user_id))
+            conn.commit()
+            logger.info(f"✅ 사용자 {user_id}의 Google 인증 정보 업데이트 완료")
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"❌ 사용자 {user_id}의 Google 인증 정보 업데이트 실패: {e}")
+        finally:
+            conn.close()
+
+    def get_user_google_credentials(self, user_id: int) -> str or None:
+        """
+        사용자의 Google OAuth 2.0 인증 정보를 DB에서 조회합니다.
+
+        Args:
+            user_id (int): 사용자 ID
+
+        Returns:
+            str or None: 직렬화된 인증 정보 (JSON 문자열), 없으면 None
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT google_auth_credentials_json FROM users WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            if row and row['google_auth_credentials_json']:
+                return row['google_auth_credentials_json']
+            return None
+        except Exception as e:
+            logger.error(f"❌ 사용자 {user_id}의 Google 인증 정보 조회 실패: {e}")
+            return None
+        finally:
+            conn.close()
