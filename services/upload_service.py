@@ -14,6 +14,7 @@ from utils.stt import STTManager
 from utils.db_manager import DatabaseManager
 from utils.vector_db_manager import vdb_manager
 from utils.validation import validate_title, parse_meeting_date
+from services.agent_service import AgentService
 
 
 class UploadService:
@@ -23,6 +24,7 @@ class UploadService:
         self.stt_manager = STTManager()
         self.db = DatabaseManager(str(config.DATABASE_PATH))
         self.vdb_manager = vdb_manager
+        self.agent_service = AgentService()
 
     def validate_file(self, filename: str) -> tuple[bool, str]:
         """
@@ -327,6 +329,16 @@ class UploadService:
                 segments=all_segments
             )
             print(f"✅ meeting_chunks에 저장 완료 (meeting_id: {saved_meeting_id})")
+
+        # [통합] Action Item 추출을 위해 AgentService 호출
+        try:
+            print(f"🤖 Action Item 추출 에이전트 호출 시작 (meeting_id: {saved_meeting_id})")
+            full_transcript = " ".join([s['segment'] for s in segments])
+            self.agent_service.process(full_transcript)
+            print(f"✅ Action Item 추출 에이전트 호출 완료 (meeting_id: {saved_meeting_id})")
+        except Exception as e:
+            print(f"⚠️ Action Item 추출 에이전트 호출 중 오류 발생: {e}")
+            # 에이전트 호출이 실패해도 전체 프로세스는 중단되지 않음
 
         return {
             'success': True,
