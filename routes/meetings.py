@@ -13,11 +13,11 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 from config import config
-from utils.db_manager import DatabaseManager
-from utils.vector_db_manager import vdb_manager
-from utils.stt import STTManager
+from database.sqlite_manager import DatabaseManager
+from database.vector_manager import vdb_manager
+from services.stt_service import STTManager
 from utils.decorators import login_required
-from utils.user_manager import (
+from services.user_service import (
     can_access_meeting,
     can_edit_meeting,
     get_user_meetings,
@@ -26,7 +26,7 @@ from utils.user_manager import (
     get_shared_users,
     remove_share
 )
-from utils.analysis import calculate_speaker_share
+from services.analysis_service import calculate_speaker_share
 from utils.validation import validate_title, parse_meeting_date
 from services.upload_service import upload_service
 
@@ -48,6 +48,90 @@ def index():
         HTML: 업로드 페이지
     """
     return render_template("index.html")
+
+
+@meetings_bp.route("/api/stats", methods=["GET"])
+@login_required
+def get_user_stats():
+    """
+    사용자 통계 조회 (이번 달 노트 수, 총 녹음 시간 등)
+
+    Returns:
+        JSON: 통계 데이터
+    """
+    user_id = session['user_id']
+    conn = db._get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 이번 달 시작일과 종료일 계산
+        now = datetime.now()
+        current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        # Admin 여부 확인
+        from services.user_service import is_admin
+        
+        # 이번 달 노트 수 (고유 meeting_id 개수)
+        if is_admin(user_id):
+            cursor.execute("""
+                SELECT COUNT(DISTINCT meeting_id) as count
+                FROM meeting_dialogues
+                WHERE meeting_date >= ?
+            """, (current_month_start.strftime("%Y-%m-%d %H:%M:%S"),))
+        else:
+            cursor.execute("""
+                SELECT COUNT(DISTINCT meeting_id) as count
+                FROM meeting_dialogues
+                WHERE owner_id = ? AND meeting_date >= ?
+            """, (user_id, current_month_start.strftime("%Y-%m-%d %H:%M:%S")))
+        
+        monthly_count = cursor.fetchone()['count'] or 0
+
+        # 총 녹음 시간 계산 (각 meeting_id별 최대 start_time의 합)
+        if is_admin(user_id):
+            cursor.execute("""
+                SELECT SUM(max_time) as total_seconds
+                FROM (
+                    SELECT meeting_id, MAX(start_time) as max_time
+                    FROM meeting_dialogues
+                    GROUP BY meeting_id
+                )
+            """)
+        else:
+            cursor.execute("""
+                SELECT SUM(max_time) as total_seconds
+                FROM (
+                    SELECT meeting_id, MAX(start_time) as max_time
+                    FROM meeting_dialogues
+                    WHERE owner_id = ?
+                    GROUP BY meeting_id
+                )
+            """, (user_id,))
+        
+        result = cursor.fetchone()
+        total_seconds = result['total_seconds'] if result and result['total_seconds'] else 0
+        
+        # 초를 시간으로 변환
+        total_hours = int(total_seconds // 3600)
+        total_minutes = int((total_seconds % 3600) // 60)
+        
+        return jsonify({
+            "success": True,
+            "stats": {
+                "monthly_notes": monthly_count,
+                "total_recording_hours": total_hours,
+                "total_recording_minutes": total_minutes,
+                "total_recording_seconds": int(total_seconds)
+            }
+        })
+    except Exception as e:
+        logger.error(f"통계 조회 오류: {e}")
+        return jsonify({
+            "success": False,
+            "error": "통계 조회 중 오류가 발생했습니다."
+        }), 500
+    finally:
+        conn.close()
 
 
 @meetings_bp.route("/notes")
@@ -475,21 +559,22 @@ def upload_and_process():
             yield f"data: {json.dumps({'step': 'upload', 'message': '파일 업로드가 완료되었습니다...', 'icon': '📤'})}\n\n"
             
             # [추가] WebM -> 호환 포맷 자동 변환 (MP4/M4A)
-            if file_path.lower().endswith('.webm'):
-                logger.info("🔄 WebM 파일 감지 -> 호환 포맷 변환 시작")
-                yield f"data: {json.dumps({'step': 'convert', 'message': '호환성을 위해 파일 형식을 변환 중...', 'icon': '🔄'})}\n\n"
-                
-                success, new_path, error_msg = upload_service.convert_webm_to_compatible_format(file_path)
-                if not success:
-                    logger.error(f"❌ 포맷 변환 실패: {error_msg}")
-                    yield f"data: {json.dumps({'step': 'error', 'message': f'파일 형식 변환 실패: {error_msg}'})}\n\n"
-                    return
-                
-                # 경로 업데이트
-                file_path = new_path
-                # MP4인 경우에만 비디오로 취급
-                is_video = file_path.lower().endswith('.mp4')
-                logger.info(f"✅ 변환 완료: {file_path} (is_video={is_video})")
+            # [OPTIMIZATION] 업로드 속도 향상을 위해 MP4 변환 로직 주석 처리 (On-Demand로 변경 예정)
+            # if file_path.lower().endswith('.webm'):
+            #     logger.info("🔄 WebM 파일 감지 -> 호환 포맷 변환 시작")
+            #     yield f"data: {json.dumps({'step': 'convert', 'message': '호환성을 위해 파일 형식을 변환 중...', 'icon': '🔄'})}\n\n"
+            #     
+            #     success, new_path, error_msg = upload_service.convert_webm_to_compatible_format(file_path)
+            #     if not success:
+            #         logger.error(f"❌ 포맷 변환 실패: {error_msg}")
+            #         yield f"data: {json.dumps({'step': 'error', 'message': f'파일 형식 변환 실패: {error_msg}'})}\n\n"
+            #         return
+            #     
+            #     # 경로 업데이트
+            #     file_path = new_path
+            #     # MP4인 경우에만 비디오로 취급
+            #     is_video = file_path.lower().endswith('.mp4')
+            #     logger.info(f"✅ 변환 완료: {file_path} (is_video={is_video})")
 
             # Step 2: 비디오 변환 (MP4에서 오디오 추출)
             audio_path_for_stt = file_path

@@ -5,16 +5,31 @@
 import os
 import uuid
 import subprocess
+import logging
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
 from config import config
-from utils.stt import STTManager
-from utils.db_manager import DatabaseManager
-from utils.vector_db_manager import vdb_manager
+from services.stt_service import STTManager
+from database.sqlite_manager import DatabaseManager
+from database.vector_manager import vdb_manager
 from utils.validation import validate_title, parse_meeting_date
 from services.agent_service import AgentService
+# [NEW] 로컬 STT 서비스 Import (병합 시 경로 확인)
+from services.diarization import diarization_service
+
+logger = logging.getLogger(__name__)
+
+# Whisper 환각 문구 블랙리스트 (무음 구간에서 자주 발생)
+HALLUCINATION_PHRASES = [
+    "이 영상은 유료 광고를 포함하고 있습니다",
+    "MBC 뉴스",
+    "시청해주셔서 감사합니다",
+    "자막",
+    "Subtitles by",
+    "Transcribed by"
+]
 
 
 class UploadService:
@@ -74,7 +89,7 @@ class UploadService:
         extension = original_filename.rsplit('.', 1)[1].lower()
         is_video = (extension in ['mp4', 'webm'])
 
-        print(f"✅ 파일 저장: {file_path} (비디오: {is_video})")
+        logger.info(f"✅ 파일 저장: {file_path} (비디오: {is_video})")
 
         return str(file_path), original_filename, is_video
 
@@ -105,7 +120,7 @@ class UploadService:
             ]
 
             # 실행 (20분 타임아웃)
-            print(f"ffmpeg 명령어 실행: {' '.join(command)}")
+            logger.info(f"ffmpeg 명령어 실행: {' '.join(command)}")
             result = subprocess.run(
                 command,
                 capture_output=True,
@@ -117,26 +132,26 @@ class UploadService:
 
             # 디버깅을 위한 상세 로그
             if result.stdout:
-                print(f"[ffmpeg stdout] {result.stdout[:500]}") # 너무 길면 자름
+                logger.debug(f"[ffmpeg stdout] {result.stdout[:500]}") # 너무 길면 자름
             if result.stderr:
-                print(f"[ffmpeg stderr] {result.stderr[:500]}")
+                logger.debug(f"[ffmpeg stderr] {result.stderr[:500]}")
 
             if result.returncode == 0:
-                print(f"✅ 비디오 → 오디오 변환 성공: {audio_path}")
+                logger.info(f"✅ 비디오 → 오디오 변환 성공: {audio_path}")
                 return True, audio_path, ""
             else:
                 error_msg = f"ffmpeg 실패: {result.stderr}"
-                print(f"❌ {error_msg}")
+                logger.error(f"❌ {error_msg}")
                 return False, "", error_msg
 
         except subprocess.TimeoutExpired:
             error_msg = "변환 타임아웃 (20분 초과)"
-            print(f"❌ {error_msg}")
+            logger.error(f"❌ {error_msg}")
             return False, "", error_msg
 
         except Exception as e:
             error_msg = f"변환 중 오류: {str(e)}"
-            print(f"❌ {error_msg}")
+            logger.error(f"❌ {error_msg}")
             return False, "", error_msg
 
     def convert_webm_to_compatible_format(self, webm_path: str) -> tuple[bool, str, str]:
@@ -164,7 +179,7 @@ class UploadService:
                     '-c:a', 'aac',
                     # 출력 파일 경로 설정 (아래에서 추가)
                 ]
-                print(f"🔄 WebM(Video) → MP4 변환 시작: {webm_path}")
+                logger.info(f"🔄 WebM(Video) → MP4 변환 시작: {webm_path}")
             else:
                 # 마이크 녹음 -> M4A (AAC) 변환
                 target_ext = '.m4a'
@@ -174,7 +189,7 @@ class UploadService:
                     '-c:a', 'aac',
                     # 출력 파일 경로 설정 (아래에서 추가)
                 ]
-                print(f"🔄 WebM(Mic) → M4A 변환 시작: {webm_path}")
+                logger.info(f"🔄 WebM(Mic) → M4A 변환 시작: {webm_path}")
 
             # 출력 파일 경로 생성
             new_path = webm_path.rsplit('.', 1)[0] + target_ext
@@ -190,23 +205,23 @@ class UploadService:
             )
             
             if result.returncode == 0:
-                print(f"✅ 변환 성공: {new_path}")
+                logger.info(f"✅ 변환 성공: {new_path}")
                 # 원본 WebM 삭제
                 try:
                     os.remove(webm_path)
-                    print("🗑️ 원본 WebM 파일 삭제됨")
-                except:
+                    logger.info("🗑️ 원본 WebM 파일 삭제됨")
+                except OSError:
                     pass
                     
                 return True, new_path, ""
             else:
                 error_msg = f"ffmpeg 변환 실패: {result.stderr}"
-                print(f"❌ {error_msg}")
+                logger.error(f"❌ {error_msg}")
                 return False, "", error_msg
                 
         except Exception as e:
             error_msg = f"변환 중 오류: {str(e)}"
-            print(f"❌ {error_msg}")
+            logger.error(f"❌ {error_msg}")
             return False, "", error_msg
 
     def convert_webm_to_mp4(self, webm_path: str) -> tuple[bool, str, str]:
@@ -237,7 +252,7 @@ class UploadService:
                 mp4_path
             ]
             
-            print(f"🔄 WebM → MP4 변환 시작: {webm_path}")
+            logger.info(f"🔄 WebM → MP4 변환 시작: {webm_path}")
             
             result = subprocess.run(
                 command,
@@ -249,23 +264,23 @@ class UploadService:
             )
             
             if result.returncode == 0:
-                print(f"✅ WebM → MP4 변환 성공: {mp4_path}")
+                logger.info(f"✅ WebM → MP4 변환 성공: {mp4_path}")
                 # 원본 WebM 삭제 (선택 사항, 여기서는 용량 절약을 위해 삭제)
                 try:
                     os.remove(webm_path)
-                    print("🗑️ 원본 WebM 파일 삭제됨")
-                except:
+                    logger.info("🗑️ 원본 WebM 파일 삭제됨")
+                except OSError:
                     pass
                     
                 return True, mp4_path, ""
             else:
                 error_msg = f"ffmpeg 변환 실패: {result.stderr}"
-                print(f"❌ {error_msg}")
+                logger.error(f"❌ {error_msg}")
                 return False, "", error_msg
                 
         except Exception as e:
             error_msg = f"MP4 변환 중 오류: {str(e)}"
-            print(f"❌ {error_msg}")
+            logger.error(f"❌ {error_msg}")
             return False, "", error_msg
 
     def process_audio_file(
@@ -292,13 +307,53 @@ class UploadService:
             dict: 처리 결과 (segments, meeting_id 등)
         """
         # STT 처리
-        print(f"🎤 STT 처리 시작: {audio_path}")
-        segments = self.stt_manager.transcribe_audio(audio_path)
+        logger.info(f"🎤 STT 처리 시작: {audio_path}")
+        
+        # -----------------------------------------------------------------
+        # [MODIFIED] 로컬 DiarizationService 사용 (기존 LLM 방식 대체)
+        # -----------------------------------------------------------------
+        # segments = self.stt_manager.transcribe_audio(audio_path)  # [LEGACY]
+        
+        try:
+            # DiarizationService는 내부적으로 ffmpeg 변환, Whisper STT, Pyannote 화자분리를 모두 수행
+            # 반환 형식: [{'speaker': 'SPEAKER_00', 'text': '...', 'start': 0.0, 'end': 5.0}, ...]
+            raw_segments = diarization_service.transcribe_and_diarize(audio_path)
+            
+            # DB 저장 형식에 맞게 변환
+            # DB 요구사항: segment['speaker'], segment['start_time'], segment['text'], segment['confidence']
+            segments = []
+            for seg in raw_segments:
+                # [FILTER] 환각 문구 필터링
+                text = seg["text"].strip()
+                is_hallucination = False
+                for phrase in HALLUCINATION_PHRASES:
+                    if phrase in text:
+                        is_hallucination = True
+                        break
+                
+                if is_hallucination:
+                    logger.warning(f"⚠️ 환각 문구 감지되어 제외됨: {text}")
+                    continue
+
+                segments.append({
+                    "speaker": seg["speaker"],
+                    "start_time": seg["start"],
+                    "text": text,
+                    "confidence": 0.95, # 로컬 모델은 confidence 점수 추출이 복잡하므로 기본값 사용
+                    "end_time": seg["end"] # (옵션) 끝 시간
+                })
+                
+        except Exception as e:
+            logger.error(f"❌ 로컬 STT 처리 중 오류 발생: {e}", exc_info=True)
+            raise ValueError(f"STT 처리 실패: {e}")
+        # -----------------------------------------------------------------
 
         if not segments:
-            raise ValueError("STT 처리 결과가 없습니다.")
+            # 환각 필터링 후 남은게 없거나, 원래 없던 경우 -> 조기 종료
+            logger.warning("⚠️ 유효한 대화 내용이 없습니다. (무음 또는 환각)")
+            raise ValueError("유효한 음성 내용이 감지되지 않았습니다. (무음 또는 배경음)")
 
-        print(f"✅ STT 완료: {len(segments)}개 세그먼트")
+        logger.info(f"✅ STT 완료: {len(segments)}개 세그먼트")
 
         # SQLite DB 저장
         # original_filename이 있으면 그것을 사용, 없으면 audio_path에서 추출
@@ -328,17 +383,17 @@ class UploadService:
                 audio_file=first_segment['audio_file'],
                 segments=all_segments
             )
-            print(f"✅ meeting_chunks에 저장 완료 (meeting_id: {saved_meeting_id})")
+            logger.info(f"✅ meeting_chunks에 저장 완료 (meeting_id: {saved_meeting_id})")
 
         # [통합] Action Item 추출을 위해 AgentService 호출
         try:
-            print(f"🤖 Action Item 추출 에이전트 호출 시작 (meeting_id: {saved_meeting_id})")
+            logger.info(f"🤖 Action Item 추출 에이전트 호출 시작 (meeting_id: {saved_meeting_id})")
             full_transcript = " ".join([s['text'] for s in segments])
             # process 메서드에 user_id 전달
             self.agent_service.process(full_transcript, owner_id)
-            print(f"✅ Action Item 추출 에이전트 호출 완료 (meeting_id: {saved_meeting_id})")
+            logger.info(f"✅ Action Item 추출 에이전트 호출 완료 (meeting_id: {saved_meeting_id})")
         except Exception as e:
-            print(f"⚠️ Action Item 추출 에이전트 호출 중 오류 발생: {e}")
+            logger.warning(f"⚠️ Action Item 추출 에이전트 호출 중 오류 발생: {e}", exc_info=True)
             # 에이전트 호출이 실패해도 전체 프로세스는 중단되지 않음
 
         return {
@@ -357,18 +412,25 @@ class UploadService:
         Returns:
             dict: 요약 결과
         """
-        print(f"🤖 문단 요약 자동 생성 시작 (meeting_id: {meeting_id})")
+        logger.info(f"🤖 문단 요약 자동 생성 시작 (meeting_id: {meeting_id})")
 
         # DB에서 모든 세그먼트 조회
         all_segments = self.db.get_segments_by_meeting_id(meeting_id)
 
         if not all_segments:
-            raise ValueError("세그먼트를 찾을 수 없습니다.")
+            # 세그먼트가 없으면 (무음 등) 요약 스킵
+            logger.warning(f"⚠️ 세그먼트가 없어 요약을 생략합니다. (meeting_id: {meeting_id})")
+            return {'success': False, 'message': 'No segments found'}
 
         first_segment = all_segments[0]
 
         # transcript_text 생성
         transcript_text = " ".join([row['segment'] for row in all_segments])
+
+        # [SAFETY] 텍스트 길이 검사 (환각 방지)
+        if len(transcript_text) < 50:
+            logger.warning(f"⚠️ 텍스트가 너무 짧아 요약을 생략합니다. (길이: {len(transcript_text)})")
+            return {'success': False, 'message': 'Text too short to summarize'}
 
         # subtopic_generate를 이용해 요약 생성
         summary_content = self.stt_manager.subtopic_generate(first_segment['title'], transcript_text)
@@ -384,11 +446,11 @@ class UploadService:
             audio_file=first_segment['audio_file'],
             summary_content=summary_content
         )
-        print(f"✅ 문단 요약 생성 및 저장 완료 (meeting_id: {meeting_id})")
+        logger.info(f"✅ 문단 요약 생성 및 저장 완료 (meeting_id: {meeting_id})")
 
         # 마인드맵 키워드 자동 생성
         try:
-            print(f"🗺️ 마인드맵 키워드 자동 생성 시작 (meeting_id: {meeting_id})")
+            logger.info(f"🗺️ 마인드맵 키워드 자동 생성 시작 (meeting_id: {meeting_id})")
 
             mindmap_content = self.stt_manager.extract_mindmap_keywords(
                 summary_content,
@@ -400,14 +462,12 @@ class UploadService:
                     meeting_id=meeting_id,
                     mindmap_content=mindmap_content
                 )
-                print(f"✅ 마인드맵 키워드 생성 및 저장 완료 (meeting_id: {meeting_id})")
+                logger.info(f"✅ 마인드맵 키워드 생성 및 저장 완료 (meeting_id: {meeting_id})")
             else:
-                print(f"⚠️ 마인드맵 키워드 생성 실패 (meeting_id: {meeting_id})")
+                logger.warning(f"⚠️ 마인드맵 키워드 생성 실패 (meeting_id: {meeting_id})")
 
         except Exception as mindmap_error:
-            print(f"⚠️ 마인드맵 키워드 자동 생성 중 오류 발생: {mindmap_error}")
-            import traceback
-            traceback.print_exc()
+            logger.warning(f"⚠️ 마인드맵 키워드 자동 생성 중 오류 발생: {mindmap_error}", exc_info=True)
             # 마인드맵 생성 실패해도 요약은 성공으로 처리
 
         return {
@@ -426,9 +486,9 @@ class UploadService:
             if file_path and os.path.exists(file_path):
                 try:
                     os.remove(file_path)
-                    print(f"🗑️  임시 파일 삭제: {file_path}")
+                    logger.info(f"🗑️  임시 파일 삭제: {file_path}")
                 except Exception as e:
-                    print(f"⚠️  임시 파일 삭제 실패: {file_path} - {e}")
+                    logger.warning(f"⚠️  임시 파일 삭제 실패: {file_path} - {e}")
 
 
 # 싱글톤 인스턴스

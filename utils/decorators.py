@@ -5,9 +5,10 @@ Flask 라우트 데코레이터
 """
 
 from functools import wraps
-from flask import session, redirect, url_for, jsonify, request
-from utils.user_manager import is_admin
+from flask import session, request, jsonify, redirect, url_for, flash
+import logging
 
+logger = logging.getLogger(__name__)
 
 def login_required(f):
     """

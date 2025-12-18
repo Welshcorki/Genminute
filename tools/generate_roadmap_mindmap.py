@@ -1,7 +1,12 @@
 import pydot
 import os
+import logging
 from IPython.display import SVG, display # 이미지를 화면에 표시하기 위한 핵심 모듈
 import sys
+
+# 로거 설정 (CLI 도구이므로 기본 설정 추가)
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
 
 # IPython 환경 체크 (Jupyter, Colab 등)
 IS_IPYTHON = 'ipykernel' in sys.modules
@@ -18,7 +23,7 @@ KOREAN_FONT_PATH = "C:/Windows/Fonts/malgun.ttf"
 # --------------------------------------------------------
 
 if not os.path.exists(KOREAN_FONT_PATH):
-    print(f"경고: 폰트 파일을 찾을 수 없습니다! -> {KOREAN_FONT_PATH}")
+    logger.warning(f"경고: 폰트 파일을 찾을 수 없습니다! -> {KOREAN_FONT_PATH}")
 
 # --- 2. 색상 및 스타일 정의 (생략) ---
 COLOR_CENTER_BG = "#FAFAFA"    # 밝은 회색 (거의 흰색)
@@ -147,26 +152,26 @@ try:
 
     # 2. IPython 환경(Jupyter/Colab)에서 바로 출력합니다.
     if IS_IPYTHON:
-        print("✅ 그래프를 화면에 바로 출력합니다:")
+        logger.info("✅ 그래프를 화면에 바로 출력합니다:")
         display(SVG(svg_data))
     else:
-        print("\n💡 IPython 환경(Jupyter/Colab)이 아닙니다. SVG 파일을 생성합니다.")
+        logger.info("\n💡 IPython 환경(Jupyter/Colab)이 아닙니다. SVG 파일을 생성합니다.")
 
     # 3. SVG 파일로 저장
     output_svg_file = 'mindmap_rendered_output.svg'
     with open(output_svg_file, 'wb') as f:
         f.write(svg_data)
-    print(f"이미지는 '{output_svg_file}' 파일로도 저장되었습니다.")
+    logger.info(f"이미지는 '{output_svg_file}' 파일로도 저장되었습니다.")
 
 
 except Exception as e:
-    print(f"\n❌ 오류 발생: {e}")
-    print("Graphviz 실행에 실패했습니다. 다음 사항을 확인해주세요:")
-    print(f"1. 폰트 경로: '{KOREAN_FONT_PATH}'가 정확한가요?")
-    print("2. Graphviz 설치: 'dot' 명령어가 작동하나요?")
-    print("3. 환경: 일반 파이썬 스크립트에서는 'pip install IPython'을 해야 화면 출력을 시도할 수 있습니다.")
+    logger.error(f"\n❌ 오류 발생: {e}", exc_info=True)
+    logger.error("Graphviz 실행에 실패했습니다. 다음 사항을 확인해주세요:")
+    logger.error(f"1. 폰트 경로: '{KOREAN_FONT_PATH}'가 정확한가요?")
+    logger.error("2. Graphviz 설치: 'dot' 명령어가 작동하나요?")
+    logger.error("3. 환경: 일반 파이썬 스크립트에서는 'pip install IPython'을 해야 화면 출력을 시도할 수 있습니다.")
 
     # 디버깅을 위해 DOT 파일 저장
     output_dot_file = 'mindmap_rendered_output.dot'
     graph.write(output_dot_file)
-    print(f"디버깅을 위해 DOT 파일 '{output_dot_file}'을 저장했습니다.")
+    logger.info(f"디버깅을 위해 DOT 파일 '{output_dot_file}'을 저장했습니다.")

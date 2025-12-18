@@ -514,7 +514,7 @@ class DatabaseManager:
             dict: 업데이트 결과 {'success': bool, 'updated_dialogues': int, 'updated_minutes': int, 'updated_vector': dict}
         """
         # ChromaDB 업데이트 먼저 수행 (순환 참조 방지를 위한 lazy import)
-        from utils.vector_db_manager import vdb_manager
+        from database.vector_manager import vdb_manager
 
         # 1. ChromaDB 메타데이터 업데이트
         vector_result = vdb_manager.update_metadata_title(meeting_id, new_title)
@@ -596,7 +596,7 @@ class DatabaseManager:
             dict: 업데이트 결과 {'success': bool, 'updated_dialogues': int, 'updated_minutes': int, 'updated_vector': dict}
         """
         # ChromaDB 업데이트 먼저 수행 (순환 참조 방지를 위한 lazy import)
-        from utils.vector_db_manager import vdb_manager
+        from database.vector_manager import vdb_manager
 
         # 1. ChromaDB 메타데이터 업데이트
         vector_result = vdb_manager.update_metadata_date(meeting_id, new_date)

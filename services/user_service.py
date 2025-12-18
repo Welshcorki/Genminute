@@ -195,28 +195,32 @@ def get_user_meetings(user_id: int) -> List[Dict]:
             # Admin: 모든 노트 (meeting_dialogues에서 고유한 meeting_id 조회)
             cursor.execute("""
                 SELECT
-                    meeting_id,
-                    title,
-                    MAX(meeting_date) as meeting_date,
+                    md.meeting_id,
+                    md.title,
+                    MAX(md.meeting_date) as meeting_date,
                     (SELECT audio_file FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) as audio_file,
-                    (SELECT owner_id FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) as owner_id
+                    (SELECT owner_id FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) as owner_id,
+                    mm.minutes_content as summary
                 FROM meeting_dialogues md
-                GROUP BY meeting_id
-                ORDER BY meeting_date DESC
+                LEFT JOIN meeting_minutes mm ON md.meeting_id = mm.meeting_id
+                GROUP BY md.meeting_id
+                ORDER BY md.meeting_date DESC
             """)
         else:
             # User: 본인이 작성한 노트만
             cursor.execute("""
                 SELECT
-                    meeting_id,
-                    title,
-                    MAX(meeting_date) as meeting_date,
+                    md.meeting_id,
+                    md.title,
+                    MAX(md.meeting_date) as meeting_date,
                     (SELECT audio_file FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) as audio_file,
-                    (SELECT owner_id FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) as owner_id
+                    (SELECT owner_id FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) as owner_id,
+                    mm.minutes_content as summary
                 FROM meeting_dialogues md
+                LEFT JOIN meeting_minutes mm ON md.meeting_id = mm.meeting_id
                 WHERE (SELECT owner_id FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) = ?
-                GROUP BY meeting_id
-                ORDER BY meeting_date DESC
+                GROUP BY md.meeting_id
+                ORDER BY md.meeting_date DESC
             """, (user_id,))
 
         meetings = cursor.fetchall()
@@ -253,9 +257,11 @@ def get_shared_meetings(user_id: int) -> List[Dict]:
                 md.title,
                 MAX(md.meeting_date) as meeting_date,
                 (SELECT audio_file FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) as audio_file,
-                (SELECT owner_id FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) as owner_id
+                (SELECT owner_id FROM meeting_dialogues WHERE meeting_id = md.meeting_id LIMIT 1) as owner_id,
+                mm.minutes_content as summary
             FROM meeting_dialogues md
             INNER JOIN meeting_shares s ON md.meeting_id = s.meeting_id
+            LEFT JOIN meeting_minutes mm ON md.meeting_id = mm.meeting_id
             WHERE s.shared_with_user_id = ?
             GROUP BY md.meeting_id
             ORDER BY meeting_date DESC

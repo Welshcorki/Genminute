@@ -1,0 +1,79 @@
+# =========================================
+# GenMinute 통합 의존성 목록 (Golden Set)
+# 통합일: 2025-12-02
+# =========================================
+
+# -----------------------------------------
+# 1. Core Stability Layer (가장 중요)
+# -----------------------------------------
+# Pyannote 3.1.1 호환성을 위해 필수 (변경 금지)
+numpy<2.0
+huggingface_hub<0.20
+
+# PyTorch (환경에 따라 CUDA 버전 선택 필요할 수 있음)
+torch
+torchaudio
+
+# -----------------------------------------
+# 2. Web Framework & Server
+# -----------------------------------------
+Flask
+Flask-CORS  # React 프론트엔드 CORS 지원
+Werkzeug
+python-dotenv
+gunicorn  # 배포용 (선택)
+
+# -----------------------------------------
+# 3. Database & Auth
+# -----------------------------------------
+firebase-admin
+SQLAlchemy
+bcrypt
+cryptography
+PyJWT
+
+# -----------------------------------------
+# 4. AI & LLM (GenAI, LangChain)
+# -----------------------------------------
+google-genai
+openai
+tiktoken
+chromadb
+langchain
+langchain-core
+langchain-community
+langchain-google-genai
+langchain-openai
+langchain-text-splitters
+langchain-chroma
+
+# -----------------------------------------
+# 5. Local STT & Diarization
+# -----------------------------------------
+faster-whisper==1.2.0
+pyannote.audio
+
+# -----------------------------------------
+# 6. Calendar & External Tools
+# -----------------------------------------
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+
+# -----------------------------------------
+# 7. Utilities & Data Processing
+# -----------------------------------------
+pandas
+requests
+requests-oauthlib
+urllib3
+certifi
+pytz
+python-dateutil
+pydantic
+pydantic-settings
+PyYAML
+
+# 마인드맵
+pydot
+graphviz

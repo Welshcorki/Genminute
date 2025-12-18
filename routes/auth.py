@@ -6,14 +6,27 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 import logging
 
 from config import config
-from utils.firebase_auth import verify_id_token
-from utils.user_manager import get_or_create_user
+from services.firebase_service import verify_id_token
+from services.user_service import get_or_create_user
 from utils.decorators import login_required
 
+auth_bp = Blueprint('auth', __name__)
 logger = logging.getLogger(__name__)
 
-# Blueprint 생성
-auth_bp = Blueprint('auth', __name__)
+
+@auth_bp.route("/api/firebase-config", methods=["GET"])
+def get_firebase_config():
+    """
+    Firebase 클라이언트 설정 반환 (프론트엔드용)
+    
+    Returns:
+        JSON: Firebase 설정 객체
+    """
+    firebase_config = config.get_firebase_config()
+    return jsonify({
+        'success': True,
+        'config': firebase_config
+    })
 
 
 @auth_bp.route("/login")

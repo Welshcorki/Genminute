@@ -8,31 +8,33 @@ Flask 애플리케이션 메인 파일
 - services/ : 비즈니스 로직
 - utils/ : 데이터베이스 및 인프라
 """
-from flask import Flask, send_from_directory, session
+from flask import Flask, render_template, jsonify, request, redirect, url_for, session, send_from_directory, Response
+from flask_cors import CORS
+import os
 import logging
+from logging.handlers import RotatingFileHandler
+from datetime import datetime
 
+# --- [Imports] ---
 from config import config
+from services.diarization import diarization_service
+from services.firebase_service import initialize_firebase
+from database.sqlite_manager import DatabaseManager
+from database.vector_manager import vdb_manager
 from routes import register_blueprints
-from utils.firebase_auth import initialize_firebase
-from utils.user_manager import is_admin
-from utils.db_manager import DatabaseManager
-from utils.vector_db_manager import vdb_manager
+from services.user_service import is_admin 
 
-# ==================== 로깅 설정 ====================
-logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL),
-    format=config.LOG_FORMAT
-)
+# Logger 초기화
 logger = logging.getLogger(__name__)
 
-
-# ==================== Flask 앱 초기화 ====================
 app = Flask(__name__)
-app.config['SECRET_KEY'] = config.SECRET_KEY
-app.config['UPLOAD_FOLDER'] = str(config.UPLOAD_FOLDER)
+app.secret_key = config.SECRET_KEY
 
-# 설정 상태 출력
-config.print_config_status(show_secrets=config.DEBUG)
+# CORS 설정: React 프론트엔드(localhost:5173)에서의 요청만 허용
+CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}}, supports_credentials=True)
+
+# 설정 적용 (최대 파일 크기 등)
+app.config.from_object(config)
 
 
 # ==================== Firebase 초기화 ====================

@@ -2,18 +2,16 @@
 챗봇 관련 라우트
 AI 질의응답
 """
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, jsonify, request, session
 import logging
 
-from config import config
-from utils.vector_db_manager import vdb_manager
-from utils.chat_manager import ChatManager
+from database.vector_manager import vdb_manager
+from services.chat_service import ChatManager
+from services.user_service import can_access_meeting, get_user_accessible_meeting_ids
 from utils.decorators import login_required
-from utils.user_manager import can_access_meeting, get_user_accessible_meeting_ids
 
 logger = logging.getLogger(__name__)
 
-# Blueprint 생성
 chat_bp = Blueprint('chat', __name__)
 
 # ChatManager 초기화 (similarity retriever 사용)

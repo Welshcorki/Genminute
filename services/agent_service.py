@@ -1,12 +1,11 @@
 import os
 import sys
 import datetime
+import logging
 from typing import List, TypedDict, Annotated, Dict
 
-# 프로젝트 루트 디렉토리를 시스템 경로에 추가
+# 프로젝트 루트 디렉토리를 시스템 경로에 추가 (직접 실행 시 필요할 수 있음)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from dotenv import load_dotenv
 
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -14,7 +13,11 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
+from config import config
 from tools.google_calendar_tool import add_calendar_event, CalendarEvent
+
+# 로거 설정
+logger = logging.getLogger(__name__)
 
 # --- 1. 상태 정의 (State Definition) ---
 class AgentState(TypedDict):
@@ -39,12 +42,11 @@ class AgentState(TypedDict):
 
 class AgentService:
     def __init__(self):
-        load_dotenv()
-        if not os.getenv("GOOGLE_API_KEY"):
+        if not config.GOOGLE_API_KEY:
             raise ValueError("GOOGLE_API_KEY가 설정되지 않았습니다.")
         
         # LLM과 Tool 정의
-        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, api_key=config.GOOGLE_API_KEY)
         self.tools = [add_calendar_event]
         self.llm_with_tools = self.llm.bind_tools(self.tools, tool_choice="any")
         
@@ -93,7 +95,7 @@ class AgentService:
                 tool_name = tool_call['name']
                 tool_args = tool_call['args']
 
-                print(f"\n>>> LLM decided to call the tool: `{tool_name}` with args: {tool_args}")
+                logger.info(f"\n>>> LLM decided to call the tool: `{tool_name}` with args: {tool_args}")
 
                 # 실제 도구 실행
                 if tool_name == "add_calendar_event":
@@ -110,7 +112,7 @@ class AgentService:
                         processed_in_this_turn.append(event.dict())
 
                     except Exception as e:
-                        print(f"Error calling tool {tool_name} with args {tool_args}: {e}")
+                        logger.error(f"Error calling tool {tool_name} with args {tool_args}: {e}", exc_info=True)
                         # 개별 도구 호출 실패가 전체를 중단시키지 않도록 처리
             
             # 이번 턴에 처리된 모든 아이템을 기존 상태에 추가하여 반환
@@ -149,14 +151,17 @@ class AgentService:
         
         # 그래프 실행
         # config는 실행을 고유하게 식별하는 ID. 동일 ID로 재실행 시 이전 상태에서 이어감.
-        config = {"configurable": {"thread_id": "meeting-123"}}
-        final_state = self.app.invoke(initial_state, config=config)
+        config_dict = {"configurable": {"thread_id": "meeting-123"}}
+        final_state = self.app.invoke(initial_state, config=config_dict)
         
         return final_state
 
 
 # --- 테스트 실행 ---
 if __name__ == '__main__':
+    # 로깅 레벨 설정 (테스트 시)
+    logging.basicConfig(level=logging.INFO)
+
     sample_minutes = """
     # 2025년 1분기 마케팅 전략 회의
 
@@ -170,13 +175,14 @@ if __name__ == '__main__':
     - '프로젝트 썬라이즈' 캠페인 진행 승인.
     """
     
-    print("--- Agent Service Initializing ---")
+    logger.info("--- Agent Service Initializing ---")
     agent_service = AgentService()
     
-    print("\n--- Processing Meeting Minutes ---")
-    final_state = agent_service.process(sample_minutes)
+    logger.info("\n--- Processing Meeting Minutes ---")
+    # 테스트용 user_id = 1 (DB에 1번 사용자가 있고 구글 인증이 되어 있어야 함)
+    final_state = agent_service.process(sample_minutes, user_id=1)
     
-    print("\n--- Final State ---")
+    logger.info("\n--- Final State ---")
     # LLM의 최종 응답 메시지 출력
     print("LLM Final Message:", final_state['messages'][-1].content)
     # 처리된 아이템(캘린더에 등록된) 정보 출력

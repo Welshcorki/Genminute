@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 from typing import Optional
 
 from langchain_core.tools import tool
@@ -8,8 +9,11 @@ import google.oauth2.credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from utils.db_manager import DatabaseManager
+from database.sqlite_manager import DatabaseManager
 from config import config
+
+# 로거 설정
+logger = logging.getLogger(__name__)
 
 # 데이터베이스 매니저 초기화
 db = DatabaseManager(str(config.DATABASE_PATH))
@@ -78,15 +82,15 @@ def add_calendar_event(
         created_event = service.events().insert(calendarId='primary', body=event).execute()
         event_url = created_event.get('htmlLink')
 
-        print(f"✅ Google Calendar 이벤트 생성 성공: {event_url}")
+        logger.info(f"✅ Google Calendar 이벤트 생성 성공: {event_url}")
         
         return f"성공: '{summary}' 일정이 Google Calendar에 추가되었습니다. 링크: {event_url}"
 
     except HttpError as error:
-        print(f"❌ Google Calendar API 오류 발생: {error}")
+        logger.error(f"❌ Google Calendar API 오류 발생: {error}")
         return f"오류: Google Calendar API 호출에 실패했습니다. 에러: {error}"
     except Exception as e:
-        print(f"❌ 일정 추가 중 예외 발생: {e}")
+        logger.error(f"❌ 일정 추가 중 예외 발생: {e}", exc_info=True)
         return f"오류: 일정을 추가하는 중 알 수 없는 오류가 발생했습니다. 에러: {e}"
 
 

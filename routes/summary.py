@@ -2,15 +2,15 @@
 요약 및 회의록 관련 라우트
 문단 요약, 회의록 생성
 """
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, jsonify, request, session, render_template
 import logging
 
 from config import config
-from utils.db_manager import DatabaseManager
-from utils.vector_db_manager import vdb_manager
-from utils.stt import STTManager
-from utils.decorators import login_required
-from utils.user_manager import can_access_meeting
+from database.sqlite_manager import DatabaseManager
+from database.vector_manager import vdb_manager
+from services.stt_service import STTManager
+from services.user_service import can_access_meeting
+from utils.decorators import login_required, admin_required
 
 logger = logging.getLogger(__name__)
 

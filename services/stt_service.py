@@ -38,7 +38,7 @@ class STTManager:
                 return minutes * 60 + seconds + milliseconds / 1000.0
             else:
                 return 0.0
-        except:
+        except (ValueError, IndexError):
             return 0.0
         
     
@@ -256,7 +256,7 @@ class STTManager:
         try:
             dt_obj = datetime.strptime(meeting_date, "%Y-%m-%d %H:%M:%S")
             meeting_date_formatted = dt_obj.strftime("%Y년 %m월 %d일 %H시 %M분")
-        except:
+        except ValueError:
             meeting_date_formatted = meeting_date  # 변환 실패 시 원본 사용
 
         prompt_text = f"""당신은 회의록을 전문적으로 작성하는 AI 어시스턴트입니다.

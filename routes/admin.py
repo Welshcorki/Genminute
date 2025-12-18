@@ -2,15 +2,13 @@
 관리자 전용 라우트
 검색 테스트, 스크립트 입력 등 디버그 기능
 """
-from flask import Blueprint, render_template, request, jsonify, session, Response, stream_with_context
-import json
-from datetime import datetime
+from flask import Blueprint, render_template, jsonify, request
 
-from config import config
-from utils.db_manager import DatabaseManager
-from utils.vector_db_manager import vdb_manager
-from utils.stt import STTManager
+from database.sqlite_manager import DatabaseManager
+from database.vector_manager import vdb_manager
+from services.stt_service import STTManager
 from utils.decorators import login_required, admin_required
+from config import config
 
 # Blueprint 생성
 admin_bp = Blueprint('admin', __name__)

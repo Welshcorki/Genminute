@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 추가적인 커스텀 스타일이 필요하면 여기에 작성 */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}

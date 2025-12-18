@@ -35,7 +35,7 @@ class ChatManager:
         """
         # vector_db_manager가 None이면 자동 생성 (Singleton이므로 항상 같은 인스턴스)
         if vector_db_manager is None:
-            from utils.vector_db_manager import VectorDBManager
+            from database.vector_manager import VectorDBManager
             vector_db_manager = VectorDBManager()
 
         self.vdb_manager = vector_db_manager

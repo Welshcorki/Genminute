@@ -42,12 +42,9 @@ class Config:
     # ==================== API 키 ====================
     OPENAI_API_KEY: str = os.getenv('OPENAI_API_KEY', '')
     GOOGLE_API_KEY: str = os.getenv('GOOGLE_API_KEY', '')
-<<<<<<< HEAD:experiments_stt/config.py
     HF_TOKEN: str = os.getenv('HUGGINGFACEHUB_API_TOKEN', '') or os.getenv('HF_TOKEN', '')
-=======
     GOOGLE_CLIENT_ID: str = os.getenv('GOOGLE_CLIENT_ID', '')
     GOOGLE_CLIENT_SECRET: str = os.getenv('GOOGLE_CLIENT_SECRET', '')
->>>>>>> 018a8b12d46ebe7b11dfa3e84efd62898c0e1e41:config.py
 
     # ==================== 파일 업로드 설정 ====================
     ALLOWED_EXTENSIONS: Set[str] = {"wav", "mp3", "m4a", "flac", "mp4", "webm"}
