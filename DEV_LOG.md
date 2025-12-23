@@ -988,3 +988,163 @@ import type { UploadProgress } from '../services/upload';
 *   검색 및 필터링 개선 (날짜 범위, 태그, 페이지네이션).
 
 ---
+
+## 2025년 12월 18일 - Priority 1: 공유 기능 UI 구현 완료
+
+### 1. 개요 (Overview)
+백엔드에 이미 구현되어 있던 공유 기능 API를 활용하여 프론트엔드 UI를 구현함. 노트 소유자가 이메일 기반으로 노트를 공유하고, 공유받은 사용자 목록을 조회/관리하며, 공유받은 노트를 별도 페이지에서 확인할 수 있는 기능을 완성함.
+
+### 2. 주요 변경 사항 (Changes)
+
+#### 📧 공유 서비스 레이어 생성 (`frontend/src/services/share.ts`)
+*   **신규 생성:** 공유 기능 관련 API 호출을 담당하는 서비스 레이어 구현.
+*   **구현 메서드:**
+    *   `shareMeeting(meetingId, email)`: 이메일 기반 노트 공유.
+    *   `getSharedUsers(meetingId)`: 공유받은 사용자 목록 조회.
+    *   `unshareMeeting(meetingId, userId)`: 공유 해제.
+    *   `getSharedMeetings()`: 공유받은 노트 목록 조회.
+*   **타입 정의:**
+    *   `SharedUser`, `ShareResponse`, `SharedUsersResponse`, `SharedMeeting`, `SharedMeetingsResponse` 인터페이스 추가.
+
+#### 🎨 공유 모달 컴포넌트 생성 (`frontend/src/components/ShareModal.tsx`)
+*   **신규 생성:** 노트 공유를 위한 모달 컴포넌트 구현.
+*   **주요 기능:**
+    *   이메일 입력 필드 및 형식 검증 (정규식 사용).
+    *   공유 버튼 및 로딩 상태 표시.
+    *   공유된 사용자 목록 표시 (프로필 이미지, 이름, 이메일).
+    *   공유 해제 기능 (삭제 버튼).
+    *   에러/성공 메시지 표시.
+    *   Enter 키로 공유 가능.
+*   **UI/UX:**
+    *   모달 배경 클릭 시 닫기.
+    *   모달 내부 클릭 시 이벤트 전파 방지 (`e.stopPropagation()`).
+    *   공유 성공 후 자동으로 사용자 목록 새로고침.
+
+#### 📄 NoteDetail 페이지에 공유 메뉴 추가 (`frontend/src/pages/NoteDetail.tsx`)
+*   **MoreVertical 메뉴 확장:**
+    *   "공유" 옵션 추가 (`Share2` 아이콘 사용).
+    *   ShareModal 컴포넌트 연동.
+    *   `isShareModalOpen` 상태 추가.
+*   **권한 체크:**
+    *   `can_edit`이 true일 때만 MoreVertical 메뉴가 표시되므로, 공유 메뉴도 자동으로 권한 체크됨.
+
+#### 📋 공유받은 노트 목록 페이지 생성 (`frontend/src/pages/SharedNoteList.tsx`)
+*   **신규 생성:** NoteList와 유사한 구조로 공유받은 노트만 표시하는 페이지 구현.
+*   **주요 기능:**
+    *   공유받은 노트 목록 조회 및 표시.
+    *   검색 기능 (제목, 요약 내용 검색).
+    *   "공유받음" 뱃지 표시.
+    *   노트 카드 클릭 시 상세 페이지 이동.
+*   **UI/UX:**
+    *   빈 상태 메시지 (공유받은 노트가 없을 때).
+    *   검색 결과가 없을 때 안내 메시지.
+
+#### 🛣️ 라우팅 및 네비게이션 추가
+*   **`frontend/src/App.tsx`:**
+    *   `/shared-notes` 라우트 추가.
+    *   `SharedNoteList` 컴포넌트 import 및 라우팅 설정.
+*   **`frontend/src/components/Layout.tsx`:**
+    *   데스크톱 네비게이션에 "공유받은 노트" 메뉴 추가 (`Share2` 아이콘).
+    *   모바일 네비게이션에도 동일 메뉴 추가.
+    *   활성 상태 표시 (`isActive('/shared-notes')`).
+
+#### 🔧 백엔드 API 추가 및 수정 (`routes/meetings.py`)
+*   **신규 API 엔드포인트:**
+    *   `GET /api/shared-notes`: 공유받은 노트 목록 조회 (JSON API).
+    *   기존 `/shared-notes` 라우트는 HTML 템플릿을 반환했으나, 프론트엔드 SPA를 위해 JSON API 추가.
+*   **버그 수정:**
+    *   `unshare_meeting_route`에서 `remove_share()` 함수 호출 시 `owner_id` 파라미터 누락 문제 해결.
+    *   `remove_share(meeting_id, user_id, target_user_id)` 형태로 수정.
+
+### 3. 기술적 특징 (Technical Notes)
+
+#### 모달 컴포넌트 패턴
+*   **배경 오버레이 + 중앙 정렬:**
+    *   `fixed inset-0`로 전체 화면 덮기.
+    *   `z-index` 계층: 배경(z-40) < 모달(z-50).
+    *   `flex items-center justify-center`로 중앙 정렬.
+    *   배경 클릭 시 닫기, 모달 내부 클릭 시 이벤트 전파 방지.
+
+#### 이메일 검증
+*   **프론트엔드 기본 검증:**
+    *   정규식: `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
+    *   빈 문자열 체크 및 `trim()` 처리.
+    *   백엔드에서도 추가 검증 필요 (이미 구현됨).
+
+#### 공유받은 데이터 필터링
+*   **SQL 쿼리 패턴:**
+    *   `INNER JOIN`으로 공유 테이블과 조인.
+    *   `WHERE shared_with_user_id = ?`로 공유받은 노트만 조회.
+    *   `owner_id != ?`로 본인 노트 제외.
+    *   `DISTINCT`로 중복 제거.
+
+### 4. 변경된 파일 목록
+
+#### 백엔드
+*   `routes/meetings.py`
+    *   `GET /api/shared-notes` 엔드포인트 추가.
+    *   `unshare_meeting_route`에서 `remove_share()` 호출 시 `owner_id` 파라미터 추가.
+
+#### 프론트엔드 - 신규 생성
+*   `frontend/src/services/share.ts` (공유 서비스 레이어)
+*   `frontend/src/components/ShareModal.tsx` (공유 모달 컴포넌트)
+*   `frontend/src/pages/SharedNoteList.tsx` (공유받은 노트 목록 페이지)
+
+#### 프론트엔드 - 수정
+*   `frontend/src/pages/NoteDetail.tsx`
+    *   MoreVertical 메뉴에 "공유" 옵션 추가.
+    *   ShareModal 연동 및 상태 관리.
+*   `frontend/src/App.tsx`
+    *   `/shared-notes` 라우트 추가.
+*   `frontend/src/components/Layout.tsx`
+    *   데스크톱/모바일 네비게이션에 "공유받은 노트" 메뉴 추가.
+
+### 5. 현재 상태 (Status)
+*   ✅ 공유 서비스 레이어 구현 완료.
+*   ✅ 공유 모달 컴포넌트 구현 완료 (이메일 검증, 사용자 목록, 공유 해제).
+*   ✅ NoteDetail 페이지에 공유 메뉴 추가 완료.
+*   ✅ 공유받은 노트 목록 페이지 구현 완료.
+*   ✅ 라우팅 및 네비게이션 추가 완료.
+*   ✅ 백엔드 API 추가 및 버그 수정 완료.
+*   ✅ 모든 TypeScript 타입 오류 없음.
+*   ✅ 린터 오류 없음.
+
+### 6. 학습 포인트 및 코드 검증 포인트
+*   **LEARNING_POINTS.md에 추가:**
+    *   모달 컴포넌트 패턴 (배경 오버레이 + 중앙 정렬).
+    *   이메일 검증 정규식.
+    *   공유 기능 백엔드-프론트엔드 API 매핑.
+    *   공유받은 데이터 필터링 패턴.
+*   **CODE_REVIEW_GUIDE.md에 추가:**
+    *   백엔드 공유 기능 API 검증 포인트.
+    *   ShareModal 컴포넌트 검증 포인트.
+    *   share.ts 서비스 검증 포인트.
+    *   SharedNoteList 페이지 검증 포인트.
+    *   NoteDetail 페이지 공유 메뉴 검증 포인트.
+
+### 7. 다음 계획 (Next Steps)
+
+#### Priority 2: AI 에이전트 UI 연동
+*   백엔드 API 엔드포인트 추가 필요:
+    *   `POST /api/extract_action_items/{meeting_id}` - Action Item 추출.
+    *   `GET /api/action_items/{meeting_id}` - Action Item 조회.
+*   프론트엔드 구현:
+    *   Action Items 서비스 생성 (`actionItems.ts`).
+    *   ActionItemsView 컴포넌트 생성.
+    *   NoteDetail 페이지에 "Action Items" 탭 추가.
+*   예상 작업 시간: 5-6시간.
+
+#### Priority 3: 검색 및 필터링 고도화
+*   날짜 범위 필터 (시작일/종료일 선택 UI).
+*   태그 기반 필터 (태그 UI 표시, 태그별 필터링).
+*   페이지네이션 (대량 데이터 처리, 페이지 번호 표시).
+*   정렬 옵션 (최신순, 제목순, 날짜순).
+*   예상 작업 시간: 6-8시간.
+
+#### Priority 4: UX 개선 (선택)
+*   오디오 플레이어 고도화 (재생 속도 조절, 구간 반복, 파형 시각화).
+*   검색 결과 하이라이팅.
+*   로딩 상태 개선 (스켈레톤 UI 또는 로딩 애니메이션).
+*   예상 작업 시간: 4-6시간.
+
+---

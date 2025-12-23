@@ -29,6 +29,7 @@ from services.user_service import (
 from services.analysis_service import calculate_speaker_share
 from utils.validation import validate_title, parse_meeting_date
 from services.upload_service import upload_service
+from services.agent_service import AgentService
 
 # Blueprint 생성
 meetings_bp = Blueprint('meetings', __name__)
@@ -36,6 +37,17 @@ meetings_bp = Blueprint('meetings', __name__)
 # 데이터베이스 매니저 초기화
 db = DatabaseManager(str(config.DATABASE_PATH))
 stt_manager = STTManager()
+
+# Agent Service 초기화 (지연 초기화로 에러 방지)
+agent_service = None
+def get_agent_service():
+    global agent_service
+    if agent_service is None:
+        try:
+            agent_service = AgentService()
+        except Exception as e:
+            logger.warning(f"⚠️ Agent Service 초기화 실패 (선택적 기능): {e}")
+    return agent_service
 
 
 @meetings_bp.route("/")
@@ -499,7 +511,7 @@ def unshare_meeting_route(meeting_id, target_user_id):
         }), 403
 
     try:
-        result = remove_share(meeting_id, target_user_id)
+        result = remove_share(meeting_id, user_id, target_user_id)
 
         return jsonify(result)
 
@@ -508,6 +520,44 @@ def unshare_meeting_route(meeting_id, target_user_id):
         return jsonify({
             "success": False,
             "error": f"공유 해제 중 오류가 발생했습니다: {str(e)}"
+        }), 500
+
+
+@meetings_bp.route("/api/shared-notes", methods=["GET"])
+@login_required
+def get_shared_notes_api():
+    """
+    공유받은 노트 목록 조회 (JSON API)
+
+    Returns:
+        JSON: 공유받은 노트 목록
+    """
+    user_id = session['user_id']
+
+    try:
+        shared_meetings = get_shared_meetings(user_id)
+        
+        # 프론트엔드에서 사용하는 형식으로 변환
+        meetings = []
+        for meeting in shared_meetings:
+            meetings.append({
+                'meeting_id': meeting.get('meeting_id'),
+                'title': meeting.get('title'),
+                'date': meeting.get('date') or meeting.get('meeting_date'),
+                'audio_file': meeting.get('audio_file'),
+                'summary': meeting.get('summary')
+            })
+
+        return jsonify({
+            'success': True,
+            'meetings': meetings
+        })
+
+    except Exception as e:
+        logger.error(f"❌ 공유받은 노트 조회 실패: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": f"조회 중 오류가 발생했습니다: {str(e)}"
         }), 500
 
 
@@ -716,4 +766,188 @@ def get_mindmap(meeting_id):
         return jsonify({
             "success": False,
             "error": f"마인드맵 조회 중 오류 발생: {str(e)}"
+        }), 500
+
+
+# ==================== Action Items ====================
+
+@meetings_bp.route("/api/extract_action_items/<string:meeting_id>", methods=["POST"])
+@login_required
+def extract_action_items(meeting_id):
+    """
+    Action Item 추출 (수동 트리거)
+    
+    Args:
+        meeting_id: 회의 ID
+    
+    Returns:
+        JSON: 추출 결과
+    """
+    user_id = session['user_id']
+    
+    # 권한 체크
+    if not can_access_meeting(user_id, meeting_id):
+        return jsonify({
+            "success": False,
+            "error": "접근 권한이 없습니다."
+        }), 403
+    
+    try:
+        # Agent Service 초기화 확인
+        agent = get_agent_service()
+        if agent is None:
+            return jsonify({
+                "success": False,
+                "error": "Action Item 추출 기능을 사용할 수 없습니다. (Agent Service 초기화 실패)"
+            }), 503
+        
+        # 회의록 텍스트 조회
+        minutes = db.get_minutes_by_meeting_id(meeting_id)
+        if not minutes or not minutes.get('minutes_content'):
+            # 회의록이 없으면 전사본으로 대체 시도
+            segments = db.get_segments_by_meeting_id(meeting_id)
+            if not segments:
+                return jsonify({
+                    "success": False,
+                    "error": "회의록 또는 전사본을 찾을 수 없습니다."
+                }), 404
+            
+            # 전사본을 텍스트로 변환
+            meeting_text = "\n".join([f"{s.get('speaker_label', 'Unknown')}: {s.get('segment', '')}" 
+                                     for s in segments])
+        else:
+            meeting_text = minutes['minutes_content']
+        
+        # Agent Service로 Action Item 추출
+        logger.info(f"🤖 Action Item 추출 시작: meeting_id={meeting_id}")
+        final_state = agent.process(meeting_text, user_id)
+        
+        # 추출된 Action Items를 DB에 저장
+        processed_items = final_state.get('processed_items', [])
+        if processed_items:
+            # CalendarEvent 형식을 DB 형식으로 변환
+            db_items = []
+            for item in processed_items:
+                db_items.append({
+                    'content': item.get('summary', ''),
+                    'due_date': item.get('start_time'),
+                    'calendar_event_id': item.get('event_id')  # 캘린더 이벤트 ID가 있다면
+                })
+            
+            db.save_action_items(meeting_id, db_items)
+            logger.info(f"✅ Action Items 저장 완료: {len(db_items)}개")
+        
+        return jsonify({
+            "success": True,
+            "message": f"{len(processed_items)}개의 Action Item이 추출되었습니다.",
+            "count": len(processed_items)
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Action Item 추출 실패: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": f"Action Item 추출 중 오류 발생: {str(e)}"
+        }), 500
+
+
+@meetings_bp.route("/api/action_items/<string:meeting_id>", methods=["GET"])
+@login_required
+def get_action_items(meeting_id):
+    """
+    Action Item 목록 조회
+    
+    Args:
+        meeting_id: 회의 ID
+    
+    Returns:
+        JSON: Action Item 목록
+    """
+    user_id = session['user_id']
+    
+    # 권한 체크
+    if not can_access_meeting(user_id, meeting_id):
+        return jsonify({
+            "success": False,
+            "error": "접근 권한이 없습니다."
+        }), 403
+    
+    try:
+        items = db.get_action_items_by_meeting_id(meeting_id)
+        return jsonify({
+            "success": True,
+            "action_items": items
+        })
+    except Exception as e:
+        logger.error(f"❌ Action Items 조회 실패: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": f"Action Items 조회 중 오류 발생: {str(e)}"
+        }), 500
+
+
+@meetings_bp.route("/api/action_items/<int:item_id>/status", methods=["POST"])
+@login_required
+def update_action_item_status(item_id):
+    """
+    Action Item 상태 업데이트
+    
+    Args:
+        item_id: Action Item ID
+    
+    Request Body:
+        {
+            "status": "pending" | "done"
+        }
+    
+    Returns:
+        JSON: 업데이트 결과
+    """
+    user_id = session['user_id']
+    
+    try:
+        data = request.get_json()
+        status = data.get('status')
+        
+        if status not in ['pending', 'done']:
+            return jsonify({
+                "success": False,
+                "error": "잘못된 상태 값입니다. 'pending' 또는 'done'만 허용됩니다."
+            }), 400
+        
+        # Action Item의 meeting_id 조회하여 권한 체크
+        meeting_id = db.get_action_item_meeting_id(item_id)
+        
+        if not meeting_id:
+            return jsonify({
+                "success": False,
+                "error": "Action Item을 찾을 수 없습니다."
+            }), 404
+        
+        # 권한 체크
+        if not can_access_meeting(user_id, meeting_id):
+            return jsonify({
+                "success": False,
+                "error": "접근 권한이 없습니다."
+            }), 403
+        
+        # 상태 업데이트
+        success = db.update_action_item_status(item_id, status)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "상태가 업데이트되었습니다."
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "상태 업데이트에 실패했습니다."
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Action Item 상태 업데이트 실패: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": f"상태 업데이트 중 오류 발생: {str(e)}"
         }), 500

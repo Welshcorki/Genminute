@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NoteList from './pages/NoteList';
 import NoteDetail from './pages/NoteDetail';
+import SharedNoteList from './pages/SharedNoteList';
 import Recorder from './pages/Recorder';
 
 function App() {
@@ -27,7 +28,8 @@ function App() {
             }>
           <Route path="/" element={<Dashboard />} />
           <Route path="/notes" element={<NoteList />} />
-              <Route path="/notes/:meetingId" element={<NoteDetail />} />
+          <Route path="/notes/:meetingId" element={<NoteDetail />} />
+          <Route path="/shared-notes" element={<SharedNoteList />} />
           <Route path="/record" element={<Recorder />} />
         </Route>
       </Routes>

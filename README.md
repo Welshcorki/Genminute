@@ -43,7 +43,11 @@ AI 기반 회의록 자동 생성 시스템
 
 ### 5. 회의록 관리
 - **제목/날짜 수정**: 인라인 편집 기능 (소유자 전용)
-- **공유 기능**: 이메일 기반 회의록 공유
+- **공유 기능**: 
+  - 이메일 기반 회의록 공유 (소유자 전용)
+  - 공유받은 사용자 목록 조회 및 관리
+  - 공유 해제 기능
+  - 공유받은 노트 별도 목록 페이지
 - **접근 제어**: 소유자/공유 사용자/관리자 역할 기반 권한
 - **화자 비중 분석**: 발언 분량 시각화 (Chart.js)
 - **오디오/비디오 재생**: 타임스탬프 동기화 재생
@@ -69,9 +73,13 @@ AI 기반 회의록 자동 생성 시스템
 - **오디오 처리**: ffmpeg
 
 ### Frontend
-- **템플릿 엔진**: Jinja2
-- **스타일링**: 커스텀 CSS (Tailwind 스타일 유틸리티 클래스)
-- **JavaScript**: Vanilla JS + Fetch API
+- **프레임워크**: React 19.2.0 + TypeScript 5.9.3
+- **빌드 도구**: Vite 7.2.4
+- **라우팅**: React Router DOM 7.10.1
+- **스타일링**: Tailwind CSS 3.4.1
+- **HTTP 클라이언트**: Axios 1.13.2
+- **인증**: Firebase 12.7.0 (클라이언트 SDK)
+- **아이콘**: Lucide React 0.559.0
 - **차트**: Chart.js (화자 비중 시각화)
 - **마인드맵**: Markmap (SVG 기반 인터랙티브 렌더링)
 
@@ -108,14 +116,46 @@ genminute/
 │   ├── validation.py               # 입력 검증 유틸리티
 │   └── vector_db_manager.py        # ChromaDB 벡터 데이터베이스
 │
-├── templates/                      # Jinja2 HTML 템플릿
-│   ├── layout.html                 # 기본 레이아웃 (네비게이션, 챗봇)
+├── frontend/                       # React 프론트엔드 (SPA)
+│   ├── src/
+│   │   ├── pages/                  # 페이지 컴포넌트
+│   │   │   ├── Dashboard.tsx       # 대시보드
+│   │   │   ├── NoteList.tsx        # 노트 목록
+│   │   │   ├── NoteDetail.tsx      # 노트 상세
+│   │   │   ├── SharedNoteList.tsx  # 공유받은 노트 목록
+│   │   │   ├── Recorder.tsx        # 실시간 녹음/녹화
+│   │   │   └── Login.tsx           # 로그인
+│   │   ├── components/             # 재사용 가능한 컴포넌트
+│   │   │   ├── Layout.tsx          # 레이아웃 (네비게이션)
+│   │   │   ├── ShareModal.tsx      # 공유 모달
+│   │   │   ├── MinutesView.tsx     # 회의록 뷰어
+│   │   │   ├── SummaryView.tsx     # 요약 뷰어
+│   │   │   ├── MindmapView.tsx     # 마인드맵 뷰어
+│   │   │   └── GlobalChatSidebar.tsx # 전역 챗봇 사이드바
+│   │   ├── services/               # API 서비스 레이어
+│   │   │   ├── api.ts              # Axios 인스턴스
+│   │   │   ├── auth.ts             # 인증 서비스
+│   │   │   ├── meeting.ts          # 회의록 서비스
+│   │   │   ├── share.ts            # 공유 서비스
+│   │   │   ├── chat.ts             # 챗봇 서비스
+│   │   │   └── ...
+│   │   ├── contexts/               # React Context
+│   │   │   ├── AuthContext.tsx     # 인증 상태 관리
+│   │   │   └── UploadContext.tsx   # 업로드 상태 관리
+│   │   ├── hooks/                  # 커스텀 훅
+│   │   │   └── useRecorder.ts      # 녹음/녹화 훅
+│   │   └── config/                  # 설정
+│   │       └── firebase.ts         # Firebase 클라이언트 설정
+│   ├── package.json                # Node.js 종속성
+│   └── vite.config.ts              # Vite 빌드 설정
+│
+├── templates/                      # Jinja2 HTML 템플릿 (레거시)
+│   ├── layout.html                 # 기본 레이아웃
 │   ├── index.html                  # 업로드 페이지
 │   ├── viewer.html                 # 회의록 뷰어
-│   ├── shared-notes.html           # 공유된 회의록 목록
-│   └── ...                         # 기타 테스트 페이지
+│   └── ...
 │
-├── static/                         # 정적 파일
+├── static/                         # 정적 파일 (레거시)
 │   ├── css/
 │   │   └── style.css               # 메인 스타일시트
 │   └── js/
@@ -257,6 +297,7 @@ Content: "### 주제\n* 포인트 1\n* 포인트 2..." 형식
 | `/api/share/<meeting_id>` | POST | 필수 | 이메일로 회의록 공유 (소유자 전용) |
 | `/api/shared_users/<meeting_id>` | GET | 필수 | 공유된 사용자 목록 조회 |
 | `/api/unshare/<meeting_id>/<user_id>` | POST | 필수 | 공유 해제 (소유자 전용) |
+| `/api/shared-notes` | GET | 필수 | 공유받은 노트 목록 조회 (JSON API) |
 | `/api/mindmap/<meeting_id>` | GET | 필수 | 마인드맵 데이터 조회 |
 
 ### 요약 및 회의록 (summary.py)
@@ -348,14 +389,38 @@ ADMIN_EMAILS=admin1@example.com,admin2@example.com
 2. "Generate New Private Key" 클릭
 3. 다운로드한 JSON 파일을 `firebase-adminsdk.json`로 저장
 
-### 3. 애플리케이션 실행
+### 3. 프론트엔드 빌드 및 실행
+
+#### 3.1 프론트엔드 종속성 설치
 ```bash
+cd frontend
+npm install
+```
+
+#### 3.2 프론트엔드 개발 서버 실행 (선택사항)
+```bash
+# 프론트엔드만 별도로 개발할 때
+npm run dev
+```
+
+#### 3.3 프론트엔드 프로덕션 빌드
+```bash
+# 프로덕션 빌드 생성 (dist 폴더에 생성됨)
+npm run build
+```
+
+### 4. 백엔드 애플리케이션 실행
+```bash
+# 프로젝트 루트에서
 python app.py
 ```
 
 브라우저에서 `http://localhost:5050` 접속
 
-**참고:** 데이터베이스 테이블은 `app.py` 실행 시 자동으로 생성됩니다. 별도의 초기화 스크립트 실행이 필요 없습니다.
+**참고:** 
+- 데이터베이스 테이블은 `app.py` 실행 시 자동으로 생성됩니다. 별도의 초기화 스크립트 실행이 필요 없습니다.
+- 프론트엔드는 빌드된 `dist` 폴더의 정적 파일을 Flask가 서빙합니다.
+- 개발 환경에서는 프론트엔드 개발 서버(`npm run dev`)와 백엔드 서버를 동시에 실행하고, 프록시 설정을 통해 연동할 수 있습니다.
 
 **선택사항 - 수동 DB 초기화:**
 ```bash

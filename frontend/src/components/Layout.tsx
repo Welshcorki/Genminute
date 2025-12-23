@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, FileText, Mic, Menu, X, LogOut, User } from 'lucide-react';
+import { Home, FileText, Mic, Menu, X, LogOut, User, Share2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import GlobalChatSidebar from './GlobalChatSidebar';
@@ -42,6 +42,7 @@ const Layout = () => {
             <nav className="hidden md:flex items-center space-x-6">
               <NavLink to="/" icon={<Home size={20} />} label="홈" active={isActive('/')} />
               <NavLink to="/notes" icon={<FileText size={20} />} label="내 노트" active={isActive('/notes')} />
+              <NavLink to="/shared-notes" icon={<Share2 size={20} />} label="공유받은 노트" active={isActive('/shared-notes')} />
               <NavLink to="/record" icon={<Mic size={20} />} label="기록" active={isActive('/record')} />
 
               {/* User Menu */}
@@ -129,6 +130,7 @@ const Layout = () => {
               
               <MobileNavLink to="/" icon={<Home size={20} />} label="홈" active={isActive('/')} onClick={closeMenu} />
               <MobileNavLink to="/notes" icon={<FileText size={20} />} label="내 노트" active={isActive('/notes')} onClick={closeMenu} />
+              <MobileNavLink to="/shared-notes" icon={<Share2 size={20} />} label="공유받은 노트" active={isActive('/shared-notes')} onClick={closeMenu} />
               <MobileNavLink to="/record" icon={<Mic size={20} />} label="기록" active={isActive('/record')} onClick={closeMenu} />
               
               {/* Logout Button */}

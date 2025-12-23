@@ -2,7 +2,8 @@
  * 인증 컨텍스트
  * 전역 인증 상태 관리 및 Firebase 연동
  */
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { 
   signInWithPopup,
   signOut as firebaseSignOut,

@@ -515,6 +515,178 @@ const [editValue, setEditValue] = useState('');
 
 ---
 
+### 10. TypeScript `import` vs `import type` 차이
+
+**문제:** TypeScript에서 타입과 값을 구분하여 import해야 함.
+
+```typescript
+// ❌ 잘못된 방식: 타입과 값을 함께 import
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// ReactNode는 타입인데 런타임 import에 포함됨
+
+// ✅ 올바른 방식: 타입과 값을 분리
+import { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
+```
+
+**차이점:**
+
+| 구분 | `import` | `import type` |
+|------|----------|---------------|
+| 용도 | 실제 값/함수/클래스 | 타입 정보만 |
+| 번들 포함 | ✅ 포함됨 | ❌ 제거됨 |
+| 런타임 존재 | ✅ 존재함 | ❌ 존재하지 않음 |
+| 사용 예시 | `useState`, `createContext` | `ReactNode`, `User`, `interface` |
+
+**핵심 포인트:**
+- **타입은 컴파일 시 제거됨:** `import type`으로 가져온 타입은 JavaScript로 컴파일될 때 완전히 사라짐
+- **번들 크기 최적화:** 타입을 `import type`으로 분리하면 불필요한 코드가 번들에 포함되지 않음
+- **`verbatimModuleSyntax: true` 설정:** TypeScript 5.0+에서 이 설정이 활성화되면 타입과 값을 명확히 구분해야 함
+- **명확성:** 코드만 봐도 타입인지 값인지 구분 가능
+
+**실제 사용 예시:**
+```typescript
+// 런타임에 필요한 실제 함수들
+import { useState, useEffect } from 'react';
+import { signInWithPopup } from 'firebase/auth';
+
+// 타입 정보만 필요한 경우
+import type { ReactNode } from 'react';
+import type { User as FirebaseUser } from 'firebase/auth';
+
+// 사용
+interface AuthProviderProps {
+  children: ReactNode; // 타입 체크용
+}
+
+const [user, setUser] = useState<FirebaseUser | null>(null); // 타입 체크용
+```
+
+**학습일:** 2025-12-18
+
+---
+
+### 11. 모달 컴포넌트 패턴 (배경 오버레이 + 중앙 정렬)
+
+**패턴:** 모달을 화면 중앙에 표시하고 배경을 어둡게 처리하는 UI 패턴.
+
+```typescript
+// ✅ 표준 모달 패턴
+{isOpen && (
+  <>
+    {/* 배경 오버레이 - 클릭 시 닫기 */}
+    <div
+      className="fixed inset-0 bg-black/50 z-40"
+      onClick={onClose}
+    />
+    
+    {/* 모달 컨테이너 - 중앙 정렬 */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="bg-white rounded-xl shadow-xl w-full max-w-md"
+        onClick={(e) => e.stopPropagation()} // 모달 내부 클릭 시 닫히지 않음
+      >
+        {/* 모달 내용 */}
+      </div>
+    </div>
+  </>
+)}
+```
+
+**핵심 포인트:**
+- `fixed inset-0`: 전체 화면 덮기
+- `z-index` 계층: 배경(z-40) < 모달(z-50)
+- `flex items-center justify-center`: 중앙 정렬
+- `e.stopPropagation()`: 모달 내부 클릭 시 이벤트 전파 방지
+- 배경 클릭 시 닫기: `onClick={onClose}`
+
+**학습일:** 2025-12-18
+
+---
+
+### 12. 이메일 검증 정규식
+
+**패턴:** 간단한 이메일 형식 검증 (프론트엔드 기본 검증).
+
+```typescript
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+if (!emailRegex.test(email.trim())) {
+  setError('올바른 이메일 형식을 입력해주세요.');
+  return;
+}
+```
+
+**핵심 포인트:**
+- `[^\s@]+`: @ 앞에 공백과 @가 없는 문자 1개 이상
+- `@`: @ 기호 필수
+- `[^\s@]+`: @ 뒤에 공백과 @가 없는 문자 1개 이상
+- `\.`: 점(.) 필수 (이스케이프 필요)
+- `[^\s@]+`: 도메인 확장자 (공백과 @가 없는 문자 1개 이상)
+- **주의:** 완벽한 이메일 검증은 아니지만, 기본적인 형식 검증에는 충분
+- 백엔드에서도 추가 검증 필요
+
+**학습일:** 2025-12-18
+
+---
+
+### 13. 공유 기능 백엔드-프론트엔드 API 매핑
+
+**교훈:** 백엔드 함수 시그니처와 프론트엔드 호출이 일치해야 함.
+
+**문제 상황:**
+```python
+# 백엔드 함수 시그니처
+def remove_share(meeting_id: str, owner_id: int, shared_user_id: int) -> Dict:
+
+# 잘못된 호출 (owner_id 누락)
+result = remove_share(meeting_id, target_user_id)  # ❌
+
+# 올바른 호출
+result = remove_share(meeting_id, user_id, target_user_id)  # ✅
+```
+
+**핵심 포인트:**
+- 백엔드 함수 파라미터 순서 확인
+- 세션에서 가져온 `user_id`를 명시적으로 전달
+- 함수 시그니처와 호출부 일치 확인
+- 타입 힌트가 있으면 파라미터 순서 확인 용이
+
+**학습일:** 2025-12-18
+
+---
+
+### 14. 공유받은 데이터 필터링 패턴
+
+**패턴:** 백엔드에서 공유받은 데이터만 조회하는 SQL 쿼리 패턴.
+
+```python
+# 공유받은 노트만 조회 (본인 노트 제외)
+cursor.execute("""
+    SELECT DISTINCT
+        md.meeting_id,
+        md.title,
+        MAX(md.meeting_date) as meeting_date,
+        ...
+    FROM meeting_dialogues md
+    INNER JOIN meeting_shares s ON md.meeting_id = s.meeting_id
+    WHERE s.shared_with_user_id = ?
+      AND md.owner_id != ?  -- 본인 노트 제외
+    GROUP BY md.meeting_id
+    ORDER BY meeting_date DESC
+""", (user_id, user_id))
+```
+
+**핵심 포인트:**
+- `INNER JOIN`: 공유 테이블과 조인하여 공유된 노트만 조회
+- `WHERE shared_with_user_id = ?`: 현재 사용자가 공유받은 노트만
+- `owner_id != ?`: 본인이 만든 노트는 제외 (공유받은 것만)
+- `DISTINCT`: 중복 제거 (같은 노트가 여러 세그먼트로 나뉘어 있을 수 있음)
+
+**학습일:** 2025-12-18
+
+---
+
 ## 🔗 참고 링크
 
 - [Vite TypeScript 설정](https://vitejs.dev/guide/features.html#typescript)
@@ -525,5 +697,5 @@ const [editValue, setEditValue] = useState('');
 
 ---
 
-*마지막 업데이트: 2025-12-18 (3차)*
+*마지막 업데이트: 2025-12-18 (5차 - 공유 기능 UI 구현)*
 

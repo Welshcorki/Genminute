@@ -23,6 +23,12 @@
 - **`routes/meetings.py`**
   - 통계 API 엔드포인트 추가 (`/api/stats`)
   - 이번 달 노트 수, 총 녹음 시간 계산 로직
+  - **공유 기능 API 추가:**
+    - `POST /api/share/{meeting_id}` - 노트 공유
+    - `GET /api/shared_users/{meeting_id}` - 공유 사용자 목록 조회
+    - `POST /api/unshare/{meeting_id}/{user_id}` - 공유 해제
+    - `GET /api/shared-notes` - 공유받은 노트 목록 조회 (JSON API)
+  - `remove_share()` 함수 호출 시 `owner_id` 파라미터 추가
 
 ### 프론트엔드
 
@@ -51,6 +57,16 @@
 
 - **`frontend/src/App.tsx`**
   - `Recorder`, `NoteDetail` 라우팅 추가
+  - `/shared-notes` 라우팅 추가
+
+- **`frontend/src/components/Layout.tsx`**
+  - 데스크톱/모바일 네비게이션에 "공유받은 노트" 메뉴 추가
+  - `Share2` 아이콘 import 추가
+
+- **`frontend/src/pages/NoteDetail.tsx`**
+  - MoreVertical 메뉴에 "공유" 옵션 추가
+  - `ShareModal` 컴포넌트 연동
+  - `isShareModalOpen` 상태 추가
 
 #### 새로 생성된 파일
 
@@ -79,6 +95,11 @@
   - 회의록 조회/생성 API 서비스
   - `getMinutes()`, `generateMinutes()` 메서드
   - `MinutesResponse` 인터페이스
+
+- **`frontend/src/services/share.ts`** *(신규)*
+  - 공유 기능 API 서비스
+  - `shareMeeting()`, `getSharedUsers()`, `unshareMeeting()`, `getSharedMeetings()` 메서드
+  - `SharedUser`, `ShareResponse`, `SharedUsersResponse`, `SharedMeeting`, `SharedMeetingsResponse` 인터페이스
 
 ##### 훅 (Hooks)
 - **`frontend/src/hooks/useRecorder.ts`** *(전면 재작성)*
@@ -138,6 +159,14 @@
   - 마크다운 렌더링 (제목, 리스트, 일반 텍스트)
   - 다시 생성 기능
 
+- **`frontend/src/components/ShareModal.tsx`** *(신규)*
+  - 노트 공유 모달 컴포넌트
+  - 이메일 입력 및 검증
+  - 공유 버튼
+  - 공유된 사용자 목록 표시
+  - 공유 해제 기능
+  - 에러/성공 메시지 표시
+
 ##### Context (전역 상태)
 - **`frontend/src/contexts/UploadContext.tsx`** *(신규)*
   - 전역 업로드 상태 관리
@@ -168,7 +197,14 @@
   - 챗봇 탭 (ChatSidebar)
   - **편집 기능:** MoreVertical 메뉴에 제목/날짜 수정 옵션 추가
   - **인라인 편집:** 제목/날짜 클릭 시 입력 필드로 전환
+  - **공유 기능:** MoreVertical 메뉴에 "공유" 옵션 추가, ShareModal 연동
   - 회의 삭제 기능
+
+- **`frontend/src/pages/SharedNoteList.tsx`** *(신규)*
+  - 공유받은 노트 목록 페이지
+  - NoteList와 유사한 구조
+  - 공유받은 노트만 표시
+  - 검색 기능 포함
 
 ---
 
@@ -475,6 +511,173 @@
 - requestAnimationFrame 정리 누락 시 메모리 누수
 - Canvas 크기 변경 시 깜빡임
 - 고주사율 모니터에서 성능
+
+### 10. 백엔드: `routes/meetings.py` - 공유 기능 API
+
+**위치:** 
+- `@meetings_bp.route("/api/share/<string:meeting_id>", methods=["POST"])`
+- `@meetings_bp.route("/api/shared_users/<string:meeting_id>")`
+- `@meetings_bp.route("/api/unshare/<string:meeting_id>/<int:target_user_id>", methods=["POST"])`
+- `@meetings_bp.route("/api/shared-notes", methods=["GET"])`
+
+**확인 사항:**
+```python
+# 1. 권한 체크
+# - share_meeting_route: can_edit_meeting() 체크 (소유자만 공유 가능)
+# - get_shared_users_route: can_access_meeting() 체크 (접근 권한 확인)
+# - unshare_meeting_route: can_edit_meeting() 체크 (소유자만 해제 가능)
+# - get_shared_notes_api: 로그인 사용자만 조회 가능
+
+# 2. 함수 파라미터 일치
+# - remove_share(meeting_id, owner_id, shared_user_id) 호출 시
+#   모든 파라미터가 올바르게 전달되는가?
+# - user_id가 세션에서 올바르게 가져와지는가?
+
+# 3. SQL 쿼리
+# - 공유받은 노트 조회 시 본인 노트 제외 로직이 정확한가?
+# - DISTINCT 사용으로 중복 제거가 올바른가?
+# - ORDER BY로 정렬이 적절한가?
+
+# 4. 에러 처리
+# - 이메일이 존재하지 않는 사용자 처리
+# - 본인에게 공유 시도 처리
+// - 이미 공유된 사용자 처리
+# - 공유 정보가 없을 때 처리
+```
+
+**잠재적 문제:**
+- `remove_share()` 함수 호출 시 `owner_id` 파라미터 누락
+- SQL 쿼리에서 본인 노트 제외 로직 누락
+- 공유 테이블 조인 시 NULL 처리
+- 대량 공유 사용자 목록 조회 시 성능
+
+### 11. 프론트엔드: `ShareModal` 컴포넌트
+
+**위치:** `frontend/src/components/ShareModal.tsx`
+
+**확인 사항:**
+```typescript
+// 1. 모달 상태 관리
+// - isOpen prop이 올바르게 전달되는가?
+// - 모달이 열릴 때마다 공유 사용자 목록이 새로고침되는가?
+// - 모달이 닫힐 때 상태가 초기화되는가?
+
+// 2. 이메일 검증
+// - 이메일 형식 검증이 충분한가? (정규식)
+// - 빈 문자열 체크가 있는가?
+// - trim() 처리로 공백 제거가 되는가?
+
+// 3. API 호출
+// - shareMeeting() 에러 처리가 적절한가?
+// - getSharedUsers() 에러 처리가 적절한가?
+// - unshareMeeting() 에러 처리가 적절한가?
+// - 공유 성공 후 목록 새로고침이 되는가?
+
+// 4. 사용자 경험
+// - 로딩 상태가 표시되는가?
+// - 에러 메시지가 명확한가?
+// - 성공 메시지가 표시되는가?
+// - Enter 키로 공유가 가능한가?
+// - 모달 배경 클릭 시 닫히는가?
+
+// 5. 이벤트 전파
+// - 모달 내부 클릭 시 배경 클릭 이벤트가 전파되지 않는가?
+// - e.stopPropagation()이 올바르게 사용되는가?
+```
+
+**잠재적 문제:**
+- 이메일 검증 정규식이 너무 엄격하거나 느슨함
+- 공유 사용자 목록이 실시간으로 업데이트되지 않음
+- 모달이 닫힐 때 에러/성공 메시지가 남아있음
+- 대량 공유 사용자 목록 렌더링 성능
+
+### 12. 프론트엔드: `share.ts` 서비스
+
+**위치:** `frontend/src/services/share.ts`
+
+**확인 사항:**
+```typescript
+// 1. API 엔드포인트
+// - 모든 엔드포인트가 백엔드와 일치하는가?
+// - HTTP 메서드가 올바른가? (GET vs POST)
+
+// 2. 타입 정의
+// - SharedUser 인터페이스가 백엔드 응답과 일치하는가?
+// - SharedMeeting 인터페이스가 백엔드 응답과 일치하는가?
+// - 모든 필드가 optional이 아닌 필수 필드로 정의되었는가?
+
+// 3. 에러 처리
+// - getSharedUsers()에서 빈 배열 반환 시 에러가 아닌가?
+// - getSharedMeetings()에서 빈 배열 반환 시 에러가 아닌가?
+// - 네트워크 오류 처리가 있는가?
+
+// 4. 응답 파싱
+// - 백엔드 응답 구조 ({ success, shared_users }) 파싱이 올바른가?
+// - success가 false일 때 처리하는가?
+```
+
+**잠재적 문제:**
+- API 엔드포인트 불일치
+- 타입 정의와 실제 응답 구조 불일치
+- 에러 처리 누락
+- 빈 배열과 에러 구분 부족
+
+### 13. 프론트엔드: `SharedNoteList` 페이지
+
+**위치:** `frontend/src/pages/SharedNoteList.tsx`
+
+**확인 사항:**
+```typescript
+// 1. API 호출
+// - getSharedMeetings() 호출이 올바른가?
+// - 로딩 상태가 표시되는가?
+// - 에러 처리가 적절한가?
+
+// 2. 검색 기능
+// - 검색어 필터링이 정확한가?
+// - 대소문자 구분 없이 검색되는가?
+// - 제목과 요약 모두 검색되는가?
+
+// 3. UI/UX
+// - 공유받은 노트가 없을 때 적절한 메시지가 표시되는가?
+// - 검색 결과가 없을 때 적절한 메시지가 표시되는가?
+// - 노트 카드 클릭 시 상세 페이지로 이동하는가?
+// - "공유받음" 뱃지가 표시되는가?
+
+// 4. 데이터 구조
+// - SharedMeeting 타입이 올바르게 사용되는가?
+// - date 필드가 올바르게 표시되는가?
+```
+
+**잠재적 문제:**
+- 공유받은 노트 목록이 실시간으로 업데이트되지 않음
+- 검색 성능 (대량 데이터)
+- 날짜 포맷팅 일관성
+
+### 14. 프론트엔드: `NoteDetail` 페이지 - 공유 메뉴
+
+**위치:** `frontend/src/pages/NoteDetail.tsx`
+
+**확인 사항:**
+```typescript
+// 1. 공유 메뉴 추가
+// - MoreVertical 메뉴에 "공유" 옵션이 올바르게 추가되었는가?
+// - Share2 아이콘이 import되었는가?
+// - 메뉴 클릭 시 ShareModal이 열리는가?
+
+// 2. 상태 관리
+// - isShareModalOpen 상태가 올바르게 관리되는가?
+// - 모달이 닫힐 때 상태가 초기화되는가?
+// - meetingId가 ShareModal에 올바르게 전달되는가?
+
+// 3. 권한 체크
+// - can_edit이 false일 때 공유 메뉴가 표시되지 않는가?
+// - (현재는 can_edit일 때만 MoreVertical 메뉴가 표시되므로 자동 처리됨)
+```
+
+**잠재적 문제:**
+- meetingId가 없을 때 ShareModal 렌더링 오류
+- 모달 상태가 초기화되지 않아 이전 데이터가 남아있음
 
 ---
 
@@ -891,6 +1094,31 @@ python app.py
   - [ ] MoreVertical 버튼 이벤트 전파 방지
   - [ ] 카드 클릭 기능
 
+- [ ] `frontend/src/pages/SharedNoteList.tsx`
+  - [ ] API 호출 및 에러 처리
+  - [ ] 검색 기능
+  - [ ] UI/UX (빈 상태 메시지)
+  - [ ] 데이터 구조 일치
+
+- [ ] `frontend/src/components/ShareModal.tsx`
+  - [ ] 모달 상태 관리
+  - [ ] 이메일 검증
+  - [ ] API 호출 및 에러 처리
+  - [ ] 사용자 경험 (로딩, 메시지)
+  - [ ] 이벤트 전파 방지
+
+- [ ] `frontend/src/services/share.ts`
+  - [ ] API 엔드포인트 일치
+  - [ ] 타입 정의 완전성
+  - [ ] 에러 처리
+  - [ ] 응답 파싱
+
+- [ ] `routes/meetings.py` - 공유 기능
+  - [ ] 권한 체크
+  - [ ] 함수 파라미터 일치
+  - [ ] SQL 쿼리 정확성
+  - [ ] 에러 처리
+
 ---
 
 ## 🎯 다음 단계
@@ -953,5 +1181,5 @@ python app.py
 
 **마지막 업데이트:** 2025-12-18
 **작성자:** AI Assistant
-**버전:** 2.0 (Phase 3 핵심 기능 구현 완료)
+**버전:** 2.1 (Phase 3 핵심 기능 + Priority 1 공유 기능 UI 구현 완료)
 

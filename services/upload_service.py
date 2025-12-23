@@ -390,7 +390,23 @@ class UploadService:
             logger.info(f"🤖 Action Item 추출 에이전트 호출 시작 (meeting_id: {saved_meeting_id})")
             full_transcript = " ".join([s['text'] for s in segments])
             # process 메서드에 user_id 전달
-            self.agent_service.process(full_transcript, owner_id)
+            final_state = self.agent_service.process(full_transcript, owner_id)
+            
+            # 추출된 Action Items를 DB에 저장
+            processed_items = final_state.get('processed_items', [])
+            if processed_items:
+                # CalendarEvent 형식을 DB 형식으로 변환
+                db_items = []
+                for item in processed_items:
+                    db_items.append({
+                        'content': item.get('summary', ''),
+                        'due_date': item.get('start_time'),
+                        'calendar_event_id': item.get('event_id')  # 캘린더 이벤트 ID가 있다면
+                    })
+                
+                self.db.save_action_items(saved_meeting_id, db_items)
+                logger.info(f"✅ Action Items 저장 완료: {len(db_items)}개")
+            
             logger.info(f"✅ Action Item 추출 에이전트 호출 완료 (meeting_id: {saved_meeting_id})")
         except Exception as e:
             logger.warning(f"⚠️ Action Item 추출 에이전트 호출 중 오류 발생: {e}", exc_info=True)

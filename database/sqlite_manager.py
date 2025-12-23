@@ -121,12 +121,28 @@ class DatabaseManager:
                 )
             """)
 
-            # 6. 인덱스 생성 (성능 최적화)
+            # 6. meeting_action_items 테이블 (Action Item)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS meeting_action_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    meeting_id TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    due_date TEXT,
+                    status TEXT DEFAULT 'pending',
+                    tool_call_id TEXT,
+                    calendar_event_id TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # 7. 인덱스 생성 (성능 최적화)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_meeting_id ON meeting_dialogues(meeting_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_owner_id ON meeting_dialogues(owner_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_shares_meeting ON meeting_shares(meeting_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_items_meeting ON meeting_action_items(meeting_id)")
 
-            # 7. Admin 사용자 자동 생성
+            # 8. Admin 사용자 자동 생성
             from config import config
             admin_emails = config.ADMIN_EMAILS
 
@@ -398,6 +414,16 @@ class DatabaseManager:
         else:
             logger.info(f"[삭제 전] meeting_mindmap: 테이블 없음")
 
+        # 5. meeting_action_items 삭제 전 개수 확인
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='meeting_action_items'")
+        before_action_items = 0
+        if cursor.fetchone():
+            cursor.execute("SELECT COUNT(*) as count FROM meeting_action_items WHERE meeting_id = ?", (meeting_id,))
+            before_action_items = cursor.fetchone()['count']
+            logger.info(f"[삭제 전] meeting_action_items: {before_action_items}개")
+        else:
+            logger.info(f"[삭제 전] meeting_action_items: 테이블 없음")
+
         logger.info("-" * 70)
 
         # 4. meeting_dialogues에서 삭제 수행
@@ -425,12 +451,20 @@ class DatabaseManager:
             cursor.execute("DELETE FROM meeting_mindmap WHERE meeting_id = ?", (meeting_id,))
             deleted_mindmap = cursor.rowcount
 
+        # 8. meeting_action_items에서 삭제 수행
+        deleted_action_items = 0
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='meeting_action_items'")
+        if cursor.fetchone():
+            cursor.execute("DELETE FROM meeting_action_items WHERE meeting_id = ?", (meeting_id,))
+            deleted_action_items = cursor.rowcount
+
         conn.commit()
 
         logger.info(f"[삭제 수행] meeting_dialogues: {deleted_dialogues}개 삭제")
         logger.info(f"[삭제 수행] meeting_minutes: {deleted_minutes}개 삭제")
         logger.info(f"[삭제 수행] meeting_shares: {deleted_shares}개 삭제")
         logger.info(f"[삭제 수행] meeting_mindmap: {deleted_mindmap}개 삭제")
+        logger.info(f"[삭제 수행] meeting_action_items: {deleted_action_items}개 삭제")
 
         logger.info("-" * 70)
 
@@ -460,10 +494,17 @@ class DatabaseManager:
             after_mindmap = cursor.fetchone()['count']
             logger.info(f"[삭제 후] meeting_mindmap: {after_mindmap}개 남음")
 
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='meeting_action_items'")
+        after_action_items = 0
+        if cursor.fetchone():
+            cursor.execute("SELECT COUNT(*) as count FROM meeting_action_items WHERE meeting_id = ?", (meeting_id,))
+            after_action_items = cursor.fetchone()['count']
+            logger.info(f"[삭제 후] meeting_action_items: {after_action_items}개 남음")
+
         conn.close()
 
         # 검증 결과
-        if after_dialogues == 0 and after_minutes == 0 and after_shares == 0 and after_mindmap == 0:
+        if after_dialogues == 0 and after_minutes == 0 and after_shares == 0 and after_mindmap == 0 and after_action_items == 0:
             logger.info(f"✅ SQLite DB 삭제 검증 성공: 모든 데이터가 삭제되었습니다.")
         else:
             logger.warning(f"⚠️ SQLite DB 삭제 검증 실패: 일부 데이터가 남아있습니다!")
@@ -818,5 +859,180 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"❌ 사용자 {user_id}의 Google 인증 정보 조회 실패: {e}")
             return None
+        finally:
+            conn.close()
+
+    # ========== Action Items 관련 메서드 ==========
+
+    def save_action_items(self, meeting_id: str, items: list):
+        """
+        Action Item 목록을 데이터베이스에 저장합니다.
+
+        Args:
+            meeting_id (str): 회의 ID
+            items (list): Action Item 딕셔너리 리스트
+                각 항목은 다음 키를 포함해야 함:
+                - content (str): Action Item 내용
+                - due_date (str, optional): 마감 기한 (ISO 8601 형식)
+                - tool_call_id (str, optional): 도구 호출 ID
+                - calendar_event_id (str, optional): 캘린더 이벤트 ID
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            for item in items:
+                cursor.execute("""
+                    INSERT INTO meeting_action_items 
+                    (meeting_id, content, due_date, tool_call_id, calendar_event_id, status)
+                    VALUES (?, ?, ?, ?, ?, 'pending')
+                """, (
+                    meeting_id,
+                    item.get('content') or item.get('summary', ''),
+                    item.get('due_date') or item.get('start_time'),
+                    item.get('tool_call_id'),
+                    item.get('calendar_event_id')
+                ))
+            
+            conn.commit()
+            logger.info(f"✅ Action Items 저장 완료: meeting_id={meeting_id}, {len(items)}개 항목")
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"❌ Action Items 저장 실패: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()
+
+    def get_action_items_by_meeting_id(self, meeting_id: str):
+        """
+        회의 ID로 Action Item 목록을 조회합니다.
+
+        Args:
+            meeting_id (str): 회의 ID
+
+        Returns:
+            list: Action Item 딕셔너리 리스트
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # 테이블 존재 여부 확인
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='meeting_action_items'")
+            if not cursor.fetchone():
+                return []
+
+            cursor.execute("""
+                SELECT id, meeting_id, content, due_date, status, tool_call_id, calendar_event_id, 
+                       created_at, updated_at
+                FROM meeting_action_items
+                WHERE meeting_id = ?
+                ORDER BY created_at ASC
+            """, (meeting_id,))
+
+            items = []
+            for row in cursor.fetchall():
+                items.append({
+                    'id': row['id'],
+                    'meeting_id': row['meeting_id'],
+                    'content': row['content'],
+                    'due_date': row['due_date'],
+                    'status': row['status'],
+                    'tool_call_id': row['tool_call_id'],
+                    'calendar_event_id': row['calendar_event_id'],
+                    'created_at': row['created_at'],
+                    'updated_at': row['updated_at']
+                })
+
+            return items
+        except Exception as e:
+            logger.error(f"❌ Action Items 조회 실패: {e}", exc_info=True)
+            return []
+        finally:
+            conn.close()
+
+    def update_action_item_status(self, item_id: int, status: str):
+        """
+        Action Item의 상태를 업데이트합니다.
+
+        Args:
+            item_id (int): Action Item ID
+            status (str): 새 상태 ('pending' 또는 'done')
+
+        Returns:
+            bool: 성공 여부
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            if status not in ['pending', 'done']:
+                raise ValueError(f"잘못된 상태 값: {status}")
+
+            updated_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute("""
+                UPDATE meeting_action_items
+                SET status = ?, updated_at = ?
+                WHERE id = ?
+            """, (status, updated_at, item_id))
+
+            conn.commit()
+            logger.info(f"✅ Action Item 상태 업데이트 완료: id={item_id}, status={status}")
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"❌ Action Item 상태 업데이트 실패: {e}", exc_info=True)
+            return False
+        finally:
+            conn.close()
+
+    def get_action_item_meeting_id(self, item_id: int):
+        """
+        Action Item ID로 회의 ID를 조회합니다.
+
+        Args:
+            item_id (int): Action Item ID
+
+        Returns:
+            str or None: 회의 ID, 없으면 None
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("SELECT meeting_id FROM meeting_action_items WHERE id = ?", (item_id,))
+            row = cursor.fetchone()
+            if row:
+                return row['meeting_id']
+            return None
+        except Exception as e:
+            logger.error(f"❌ Action Item 회의 ID 조회 실패: {e}", exc_info=True)
+            return None
+        finally:
+            conn.close()
+
+    def delete_action_items_by_meeting_id(self, meeting_id: str):
+        """
+        회의 ID로 관련된 모든 Action Item을 삭제합니다.
+
+        Args:
+            meeting_id (str): 회의 ID
+
+        Returns:
+            int: 삭제된 행 수
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("DELETE FROM meeting_action_items WHERE meeting_id = ?", (meeting_id,))
+            deleted_count = cursor.rowcount
+            conn.commit()
+            logger.info(f"✅ Action Items 삭제 완료: meeting_id={meeting_id}, {deleted_count}개 삭제")
+            return deleted_count
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"❌ Action Items 삭제 실패: {e}", exc_info=True)
+            return 0
         finally:
             conn.close()

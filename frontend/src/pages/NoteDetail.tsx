@@ -27,15 +27,19 @@ import {
   Trash2,
   MoreVertical,
   Edit,
-  X
+  X,
+  Share2,
+  CheckSquare
 } from 'lucide-react';
 import { meetingService, type MeetingDetail, type TranscriptSegment } from '../services/meeting';
 import SummaryView from '../components/SummaryView';
 import MindmapView from '../components/MindmapView';
 import MinutesView from '../components/MinutesView';
+import ActionItemsView from '../components/ActionItemsView';
 import ChatSidebar from '../components/ChatSidebar';
+import ShareModal from '../components/ShareModal';
 
-type TabType = 'script' | 'summary' | 'mindmap' | 'minutes' | 'chat';
+type TabType = 'script' | 'summary' | 'mindmap' | 'minutes' | 'actionItems' | 'chat';
 
 const NoteDetail = () => {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -53,6 +57,9 @@ const NoteDetail = () => {
   const [isEditingDate, setIsEditingDate] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDate, setEditDate] = useState('');
+  
+  // 공유 모달 상태
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // 오디오 플레이어 상태
   const [isPlaying, setIsPlaying] = useState(false);
@@ -418,6 +425,17 @@ const NoteDetail = () => {
                     </button>
                     <div className="border-t border-slate-200" />
                     <button
+                      onClick={() => {
+                        setIsShareModalOpen(true);
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-left text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      공유
+                    </button>
+                    <div className="border-t border-slate-200" />
+                    <button
                       onClick={handleDelete}
                       className="w-full flex items-center gap-2 px-4 py-2 text-left text-red-600 hover:bg-red-50 transition-colors"
                     >
@@ -484,6 +502,7 @@ const NoteDetail = () => {
           { id: 'summary', label: '요약', icon: FileText },
           { id: 'mindmap', label: '마인드맵', icon: Network },
           { id: 'minutes', label: '회의록', icon: FileText },
+          { id: 'actionItems', label: 'Action Items', icon: CheckSquare },
           { id: 'chat', label: '챗봇', icon: MessageCircle },
         ].map((tab) => (
           <button
@@ -560,6 +579,13 @@ const NoteDetail = () => {
           </div>
         )}
 
+        {/* Action Items 탭 */}
+        {activeTab === 'actionItems' && (
+          <div className="p-6">
+            <ActionItemsView meetingId={meetingId!} />
+          </div>
+        )}
+
         {/* 챗봇 탭 */}
         {activeTab === 'chat' && (
           <div className="p-0">
@@ -567,6 +593,15 @@ const NoteDetail = () => {
           </div>
         )}
       </div>
+
+      {/* 공유 모달 */}
+      {meetingId && (
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          meetingId={meetingId}
+        />
+      )}
     </div>
   );
 };
