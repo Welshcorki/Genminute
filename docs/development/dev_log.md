@@ -1,5 +1,214 @@
 # GenMinute 개발 일지 (Dev Log)
 
+## 2026년 4월 8일 - STT 엔진 일원화 + Gemini 모델 통일 + Supabase 전환 계획
+
+### 1. 목표
+- 관리자/유저 페이지에서 서로 다른 STT 엔진을 사용하는 문제를 일원화
+- 하드코딩된 Gemini 모델명을 `.env` 설정으로 중앙 관리
+- Firebase → Supabase Auth 전환 계획 수립
+
+### 2. 주요 변경 사항
+
+#### 🔧 `.env.example` 전면 업데이트
+- **신규 항목 추가:** `STT_ENGINE`, `GEMINI_MODEL`, `STT_BACKEND`, `HF_TOKEN`, `GOOGLE_CLIENT_ID/SECRET`, `ALLOWED_ORIGINS`
+- **Supabase 설정 사전 배치** (주석 상태, 향후 활성화)
+- 항목 순서를 중요도/사용 빈도 기준으로 재정렬
+
+#### 🎤 STT 엔진 일원화 (Phase 2-2)
+- **문제:** 관리자 테스트(`stt_service.py` Gemini API)와 유저 업로드(`diarization.py` 로컬 모델)가 다른 코드 경로 → 디버깅 곤란, 비용 예측 불가
+- **해결:** `.env`의 `STT_ENGINE=local|gemini` 설정으로 통합 인터페이스 구현
+- **변경 파일:**
+  - `config.py`: `STT_ENGINE`, `GEMINI_MODEL` 환경변수 추가
+  - `stt_service.py`: `transcribe()` 통합 메서드 + `_normalize_local_segments()` 추가
+  - `upload_service.py`: `diarization_service` 직접 호출 → `stt_manager.transcribe()` 변경, `diarization` import 제거
+  - `routes/admin.py`: `transcribe_audio()` → `transcribe()` + 결과 필드명(`speaker_label`/`segment` → `speaker`/`text`) 통일
+
+#### 🤖 Gemini 모델명 일괄 변경 (Phase 2-3)
+- **문제:** `gemini-2.5-pro`, `gemini-2.5-flash` 등 모델명이 5곳에 하드코딩
+- **해결:** 모든 모델명을 `config.GEMINI_MODEL`로 교체, `.env`에서 한 줄로 관리
+- **변경 파일:**
+  - `stt_service.py`: 4곳 (STT L111, 요약 L213, 회의록 L339, 마인드맵 L522)
+  - `chat_service.py`: 1곳 (L50)
+  - `agent_service.py`: 1곳 (L49)
+- **기본값:** `gemini-3-flash` (비용 53%↓, 속도 3배↑, 벤치마크 성능 동등 이상)
+
+#### 📋 Supabase Auth 전환 계획 수립 (Phase 3)
+- Firebase Auth → Supabase Auth (Google OAuth) 전환 계획서 작성 완료
+- 변경 대상: 프론트엔드 4파일 + 백엔드 3파일 + config 1파일 = 총 8파일
+- 사전 준비: Supabase 프로젝트 생성, Google OAuth 설정 필요
+
+### 3. 테스트 결과
+- ✅ `genminute_stt` 가상환경에서 서버 정상 기동
+- ✅ 로그인 페이지 정상 로딩 (에러 없음)
+- ⏳ 실제 STT/요약 end-to-end 테스트는 로그인 문제 해결(Phase 3) 후 진행
+
+### 4. 향후 계획
+- Supabase 프로젝트 생성 + Google OAuth 설정
+- Firebase → Supabase Auth 코드 전환 (프론트/백엔드)
+- 로그인 정상화 후 전체 end-to-end 테스트
+
+
+## 2026년 3월 15일 - Production Readiness (배포 최적화 및 UI 고도화)
+
+### 1. 목표
+- Flask(Backend)와 React(Frontend) 통합 서빙 방식 확정 및 WSGI 최적화.
+- 누락된 프론트엔드 UI 기능 (화자 비중 차트, 마인드맵 인터랙티브 뷰어) 구현.
+- 글로벌 Python 환경에 잘못 설치된 의존성 제거 및 Conda 가상환경(`genminute_stt`) 정립.
+
+### 2. 주요 변경 사항
+
+#### 🚀 통합 배포 환경 최적화 (Backend & Frontend)
+- **프론트엔드 빌드 최적화:** `frontend/src/services/api.ts`에서 API Base URL을 `import.meta.env.VITE_API_BASE_URL`로 분리하여 환경변수를 통한 동적 제어 구성.
+- **REST API + SPA 통합 서빙 검증:** `config.py`의 `FRONTEND_BUILD_DIR`을 활용하여 Flask가 `frontend/dist` 폴더의 React 빌드 결과물을 `static` 폴더 복사 없이 직접 서빙하도록 검증 완료.
+- **CORS 및 WSGI 설정:**
+  - `.env.example`에 배포용 Gunicorn Worker 개수 및 Timeout 설정 변수(`GUNICORN_WORKERS`, `GUNICORN_TIMEOUT`) 추가.
+  - CORS 제어를 위한 `ALLOWED_ORIGINS` 설정 템플릿화.
+  - Windows 로컬 테스트를 위해 `waitress`를 성공적으로 구동하여 API 상태 점검(`curl` 및 브라우저 라우팅).
+
+#### 🎨 프론트엔드 UI/UX 고도화
+- **화자 비중 시각화 (Chart.js):** 
+  - `chart.js`, `react-chartjs-2` 패키지 도입.
+  - `SpeakerShareChart.tsx` 컴포넌트를 추가하여 회의 시간 내 화자별 발언 비중을 Doughnut 차트로 시각화.
+- **마인드맵 인터랙티브 뷰어 (Markmap):**
+  - 기존의 단순 텍스트 트리 렌더링 방식을 벗어나 `markmap-view`, `markmap-common`, `markmap-toolbar` 패키지 도입.
+  - `MindmapView.tsx`를 전면 리팩토링하여 SVG 기반의 줌/팬(Zoom/Pan)이 가능한 인터랙티브 마인드맵 컴포넌트 완성.
+
+#### 🛠️ Python 가상환경 정비
+- **문제 해결:** `pyenv`의 글로벌 Python 3.11 환경에 PyTorch 등 무거운 머신러닝 패키지가 전역 설치되어 있던 문제 발견.
+- **조치 사항:** 
+  - 글로벌 계층에 잘못 설치된 `torch`, `torchaudio`, `huggingface-hub`, `faster-whisper` 등을 `pip uninstall -y`로 완벽히 제거.
+  - 기존에 존재하던 `genminute_stt` Conda 환경을 활성화하여 다시 이관.
+  - Windows/Conda 환경 특성에 맞춰 `huggingface-hub`, `transformers` 충돌 버전을 업데이트하여 `import list_repo_tree` 의존성 에러 해결 및 서버 정상 기동 확인.
+
+### 3. 향후 계획
+- 추가로 RAG 기반 다중 문서 검색 기능 (Phase 3) 구현 논의 시작.
+## 2026년 2월 26일 - Repository 패턴 + DI 리팩토링 (설계서 14번 실행)
+
+### 1. 목표
+- DatabaseManager God Object를 도메인별 Repository로 분리 (SRP)
+- Service 계층 클래스화 + 의존성 주입(DI) 적용 (DIP)
+- Route 핸들러에서 비즈니스 로직 제거 (Thin Controller)
+- ABC 인터페이스를 통한 DB 전환 준비 (SQLite → 관계형 DB)
+
+### 2. 변경 사항
+
+#### Repository 인터페이스 (ABC) 정의
+- `database/repositories/interfaces.py`: 5개 ABC 인터페이스
+  - `MeetingRepositoryInterface`, `MinutesRepositoryInterface`, `MindmapRepositoryInterface`
+  - `ActionItemRepositoryInterface`, `UserRepositoryInterface`
+
+#### SQLite Repository 구현체
+- `database/repositories/sqlite/connection.py`: SQLite 연결 관리 + 테이블 초기화
+- `database/repositories/sqlite/meeting_repo.py`: meeting_dialogues CRUD
+- `database/repositories/sqlite/minutes_repo.py`: meeting_minutes CRUD
+- `database/repositories/sqlite/mindmap_repo.py`: meeting_mindmap CRUD
+- `database/repositories/sqlite/action_item_repo.py`: meeting_action_items CRUD
+- `database/repositories/sqlite/user_repo.py`: users Google 인증 정보 CRUD
+
+#### DatabaseManager → Facade 리팩토링
+- `database/sqlite_manager.py`: 1106줄 → 150줄 (Facade)
+  - 기존 `db.save_stt_to_db()` 등 모든 호출이 깨지지 않도록 위임
+  - 내부적으로 각 Repository 구현체에 위임
+  - `db.meeting_repo`, `db.minutes_repo` 등 접근자 프로퍼티 추가
+
+#### Service 클래스화 + DI
+- `services/user_service.py`: `UserService` 클래스 생성 (connection 주입)
+  - 하위 호환 모듈-레벨 함수 유지
+- `services/analysis_service.py`: `AnalysisService` 클래스 생성 (connection 주입)
+  - 하위 호환 모듈-레벨 함수 유지
+- `services/meeting_service.py` (신규): `MeetingService` 클래스
+  - Route에서 추출한 회의 상세 조회/통계/제목·날짜 수정/마인드맵 조회 로직
+
+#### 공통 에러 핸들러
+- `utils/decorators.py`: `@api_error_handler` 데코레이터 추가
+  - ValueError → 400, Exception → 500 일관된 JSON 응답
+
+#### Route Thin Controller화
+- `routes/meetings.py`: try/except 반복 제거, `@api_error_handler` 적용, `MeetingService` 위임
+- `routes/meetings_share.py`: `@api_error_handler` 적용
+- `routes/meetings_action_items.py`: `@api_error_handler` 적용
+
+#### app.py DI 조립
+- `app.py`: DI 조립 코드 추가
+  - `MeetingService`, `AnalysisService`, `UserService` 인스턴스 생성
+  - DB 전환 시 Repository 생성 부분만 교체
+
+#### 테스트 코드
+- `tests/test_repositories.py`: 21개 단위 테스트 (모두 통과)
+  - 각 Repository CRUD, Facade 위임, 에지 케이스
+
+### 3. 아키텍처 변경점
+```
+[기존] Route → DatabaseManager(God Object, 1106줄)
+[변경] Route → Service(DI) → Repository Interface(ABC) → SQLite 구현체
+                                                        → (미래) PostgreSQL 구현체
+```
+
+DB 전환 시 영향 범위:
+- `app.py`의 DI 조립 부분만 교체
+- Service, Route 코드 변경 없음
+
+### 4. 파일 변경 요약
+| 구분 | 파일 | 변경 |
+|------|------|------|
+| 신규 | `database/repositories/interfaces.py` | ABC 5개 |
+| 신규 | `database/repositories/sqlite/*.py` | SQLite 구현체 5개 + connection |
+| 신규 | `services/meeting_service.py` | MeetingService |
+| 신규 | `tests/test_repositories.py` | 단위 테스트 21개 |
+| 수정 | `database/sqlite_manager.py` | God Object → Facade (1106→150줄) |
+| 수정 | `services/user_service.py` | 함수 → UserService 클래스 |
+| 수정 | `services/analysis_service.py` | 함수 → AnalysisService 클래스 |
+| 수정 | `utils/decorators.py` | `@api_error_handler` 추가 |
+| 수정 | `routes/meetings.py` | Thin Controller화 |
+| 수정 | `routes/meetings_share.py` | `@api_error_handler` 적용 |
+| 수정 | `routes/meetings_action_items.py` | `@api_error_handler` 적용 |
+| 수정 | `app.py` | DI 조립 코드 추가 |
+
+---
+
+## 2026년 1월 13일 - 디버그 코드 표준화 및 Phase 1 배포 준비 작업
+
+### 1. 목표
+- Phase 1 배포 준비 작업 진행 (1.5, 1.1, 1.2, 1.3 완료)
+- 디버그 코드를 표준 logging 시스템으로 변경 (cursorrules.md 준수)
+
+### 2. 변경 사항
+
+#### Phase 1 배포 준비 작업 (이전 세션 완료)
+- **1.5 헬스 체크 엔드포인트**: `routes/health.py` 생성, `/health` 엔드포인트 추가
+- **1.1 환경 변수 및 CORS 설정**: `config.py`에 `ALLOWED_ORIGINS` 환경 변수 추가, `app.py` CORS 설정 환경 변수 기반으로 변경
+- **1.2 프론트엔드 API URL 환경 변수화**: `frontend/src/services/api.ts`에서 `VITE_API_BASE_URL` 사용
+- **1.3 React 빌드 파일 서빙**: `config.py`에 `FRONTEND_BUILD_DIR` 추가, `app.py`에 React SPA 서빙 라우트 추가
+
+#### 디버그 코드 표준화 (이번 세션)
+- **문제점**: 
+  - `app.py`와 `config.py`에 `#region agent log` 코드가 비표준 방식(JSON 직접 쓰기) 사용
+  - 하드코딩된 절대 경로 사용 (`c:\Users\butte\github\Genminute\.cursor\debug.log`)
+  - cursorrules.md의 "하드코딩 금지" 원칙 위반
+  - 프로젝트 표준 logging 시스템과 불일치
+
+- **해결**:
+  - `app.py` 7곳의 디버그 로그를 `logger.debug()`로 변경
+  - `config.py` 1곳의 디버그 로그를 `logger.debug()`로 변경
+  - 하드코딩된 경로 제거
+  - JSON 직접 쓰기 제거, 표준 logging 모듈 사용
+
+- **변경된 파일**:
+  - `app.py`: CORS 설정, React 서빙 함수 관련 7곳의 디버그 로그
+  - `config.py`: ALLOWED_ORIGINS 초기화 관련 1곳의 디버그 로그
+
+### 3. 기술적 특징
+- **표준 logging 준수**: 모든 로그가 `logger.debug()` 사용으로 프로젝트 표준과 일관성 유지
+- **환경별 제어**: `LOG_LEVEL=DEBUG` 환경 변수로 디버그 로그 출력 제어 가능
+- **코드 품질**: cursorrules.md의 하드코딩 금지 원칙 준수
+
+### 4. 다음 예정 작업
+- **1.4 프로덕션 WSGI 서버 설정 (Gunicorn)**: `gunicorn_config.py`, `wsgi.py` 생성 (2-3시간)
+- **1.6 로깅 설정 프로덕션 최적화**: 로그 파일 저장, 로테이션 설정 (1-2시간)
+- **1.7 DB 마이그레이션 전략 수립**: Alembic 또는 스키마 버전 관리 체계 (3-4시간)
+
+---
+
 ## 2025년 11월 30일 - 실시간 녹음 및 모바일 대응 기능 구현 (Phase 1)
 
 ### 1. 개요 (Overview)
@@ -1146,5 +1355,486 @@ import type { UploadProgress } from '../services/upload';
 *   검색 결과 하이라이팅.
 *   로딩 상태 개선 (스켈레톤 UI 또는 로딩 애니메이션).
 *   예상 작업 시간: 4-6시간.
+
+---
+
+## 2025년 12월 24일 - 검색 및 필터링 고도화 (Priority 3)
+
+### 1. 개요 (Overview)
+노트 목록 페이지에 페이지네이션, 검색, 날짜 범위 필터 기능을 추가하여 대량의 데이터를 효율적으로 관리하고 사용자가 원하는 노트를 빠르게 찾을 수 있도록 개선함. 무한 스크롤 방식을 채택하여 사용자 경험을 향상시킴.
+
+### 2. 주요 변경 사항 (Changes)
+
+#### 🔍 백엔드: 페이지네이션 및 필터링 지원
+- **`services/user_service.py`**:
+  - `get_user_meetings()` 함수 확장: `page`, `per_page`, `search_term`, `start_date`, `end_date` 파라미터 추가
+  - `get_user_meetings_count()` 함수 추가: 필터링 조건을 포함한 총 개수 조회
+  - SQL 쿼리 최적화: WHERE 절과 HAVING 절을 분리하여 집계 함수 조건 처리
+  - 날짜 범위 필터는 HAVING 절에서 처리 (GROUP BY 이후 집계 함수 사용)
+  
+- **`routes/meetings.py`**:
+  - `/notes_json` API 엔드포인트 수정: 쿼리 파라미터 지원 (`page`, `per_page`, `search`, `start_date`, `end_date`)
+  - 응답 형식 변경: `{ success, meetings, pagination: { page, per_page, total, total_pages } }`
+
+#### 🎨 프론트엔드: 무한 스크롤 및 필터 UI
+- **`frontend/src/services/meeting.ts`**:
+  - `getAllMeetings()` 함수 수정: 옵션 파라미터 추가 (`GetAllMeetingsOptions`)
+  - 반환 타입 변경: `PaginatedMeetingsResponse` (페이지네이션 정보 포함)
+  - `getRecentMeetings()` 함수 수정: 새로운 API 형식에 맞게 조정
+
+- **`frontend/src/pages/NoteList.tsx`**:
+  - 무한 스크롤 구현: `IntersectionObserver` API 사용
+  - 디바운싱 검색: 검색어 입력 후 500ms 대기 후 서버 요청
+  - 날짜 범위 필터 UI: 시작일/종료일 선택 및 필터 초기화 기능
+  - 상태 관리 개선: `currentPage`, `hasMore`, `isLoadingMore` 상태 추가
+  - 필터 변경 시 자동 재로드: 첫 페이지부터 다시 로드
+
+### 3. 기술적 특징 (Technical Notes)
+
+#### 무한 스크롤 구현
+- `IntersectionObserver`를 사용하여 스크롤 위치 감지
+- 관찰 대상 요소(`observerTarget`)가 뷰포트에 진입하면 다음 페이지 자동 로드
+- `useCallback`을 사용하여 함수 재생성 최소화
+
+#### 디바운싱 (Debouncing)
+- 검색어 입력 시 매번 API 호출하는 것을 방지
+- `useEffect`와 `setTimeout`을 사용하여 500ms 대기 후 실제 검색 실행
+- 사용자가 타이핑을 멈춘 후에만 서버 요청
+
+#### 서버 사이드 검색
+- 클라이언트 사이드 필터링 대신 서버에서 검색 수행
+- 제목(`title`)과 요약 내용(`minutes_content`) 모두 검색 대상
+- SQL `LIKE` 연산자 사용 (`%search_term%`)
+
+#### 날짜 범위 필터
+- HTML5 `date` input 타입 사용
+- `YYYY-MM-DD` 형식으로 전송
+- SQL에서 `MAX(meeting_date)`와 비교하여 필터링
+
+### 4. 향후 계획 (Next Steps)
+- 태그 기반 필터링 기능 추가
+- 정렬 옵션 (최신순, 제목순, 날짜순) 추가
+- 모바일/웹 페이지 분리 고려 (향후)
+
+---
+
+## 2025년 12월 24일 - 노트 상세 페이지 및 녹음 기능 개선
+
+### 1. 개요 (Overview)
+노트 상세 페이지의 오디오 재생과 스크립트 세그먼트 동기화 기능을 개선하고, 녹음 기능의 언어 자동 감지 및 업로드 상태 표시 기능을 구현함. 또한 React 렌더링 최적화 및 메모리 누수 방지를 위한 개선 작업을 수행함.
+
+### 2. 주요 변경 사항 (Changes)
+
+#### 🎯 세그먼트 선택 로직 개선 (`frontend/src/pages/NoteDetail.tsx`)
+*   **문제:** 
+    *   세그먼트 클릭 시 전체 세그먼트가 선택된 것처럼 표시됨
+    *   재생바 클릭 시 해당 시간의 세그먼트가 선택되지 않음
+    *   재생 중 현재 시간에 맞는 세그먼트가 자동 선택되지 않음
+    *   오디오 재생이 끝났을 때 재생바가 끝에 위치하지 않음
+*   **해결:**
+    *   `handleSegmentClick`: 클릭한 세그먼트의 ID를 `activeSegmentId`와 `userSelectedSegmentId`에 명시적으로 설정
+    *   `handleProgressChange`: 재생바 클릭 시 해당 시간에 가장 가까운 세그먼트를 찾아 선택
+    *   `handleTimeUpdate`: 재생 중 현재 시간이 정확히 세그먼트 범위 내에 있을 때만 세그먼트 선택, 사용자 선택(`userSelectedSegmentId`) 우선 적용
+    *   "가장 가까운 세그먼트" 로직은 현재 시간이 모든 세그먼트 범위에서 충분히 멀리 떨어져 있을 때만 실행 (임계값: 2초)
+    *   `handleEnded`: 오디오 재생 종료 시 `currentTime`을 최종 `duration`으로 설정하여 재생바가 끝에 위치하도록 수정
+    *   `formatTime`: `NaN`, `Infinity`, 음수 값 처리 추가
+
+#### 🎙️ STT 언어 자동 감지 기능 (`services/upload_service.py`, `services/diarization.py`)
+*   **문제:** 
+    *   한국어 오디오가 영어로 전사되는 문제
+    *   하드코딩된 언어 설정으로 다국어 지원 불가
+*   **해결:**
+    *   `upload_service.py`: `diarization_service.transcribe_and_diarize(audio_path, language=None)` 호출로 변경
+    *   `diarization.py`: `transcribe_and_diarize` 함수에 `language: str | None = None` 파라미터 추가
+    *   `language=None`일 때 Whisper가 자동으로 언어를 감지하도록 설정
+    *   OpenVINO 백엔드: `generate_kwargs={"language": language}` 전달 (None이면 자동 감지)
+    *   Faster-Whisper 백엔드: `language=language` 전달 (None이면 자동 감지)
+
+#### ⏱️ 오디오 Duration 처리 개선 (`frontend/src/pages/NoteDetail.tsx`)
+*   **문제:** 
+    *   WebM 파일에서 `audio.duration`이 `NaN` 또는 `Infinity`로 표시됨
+    *   오디오 메타데이터가 비동기적으로 로드되어 초기값이 유효하지 않음
+*   **해결:**
+    *   `handleLoadedMetadata`: 메타데이터 로드 시 `audio.duration` 검증 및 `duration` 상태 업데이트
+    *   `handleDurationChange`: `durationchange` 이벤트 리스너 추가하여 비동기 메타데이터 로드 대응
+    *   `formatTime`: `NaN`, `Infinity`, 음수 값 처리 로직 추가
+    *   `handleEnded`: `isNaN(audio.duration)` 체크 후 유효한 `finalDuration` 사용
+
+#### 🔑 React Key Prop 경고 해결
+*   **문제:** `Each child in a list should have a unique "key" prop` 경고 발생
+*   **해결:**
+    *   `frontend/src/pages/NoteDetail.tsx`: 스크립트 세그먼트 맵에 `key={segment.id ?? \`segment-\${index}\`}` 추가
+    *   `frontend/src/components/SummaryView.tsx`: 동적으로 생성되는 요소(h1, h2, h3, ul, br, p)의 `key`에 요소 타입 접두사 추가 (예: `key={`h1-${index}`}`)
+    *   `frontend/src/components/MinutesView.tsx`: 동일하게 `key`에 요소 타입 접두사 추가
+    *   마크다운 리스트 항목(`- ` 또는 `* `)을 `<ul>` 태그로 올바르게 래핑
+
+#### 🎬 Recorder 페이지 오디오 플레이어 안정화 (`frontend/src/pages/Recorder.tsx`)
+*   **문제:** 
+    *   제목 입력 시 오디오 재생바가 깜빡이는 현상
+    *   `URL.createObjectURL`이 매 렌더링마다 재생성되어 메모리 누수 가능성
+*   **해결:**
+    *   `PreviewSection` 컴포넌트 분리
+    *   `useMemo`를 사용하여 `audioUrl` 메모이제이션 (`URL.createObjectURL(recordedBlob)`)
+    *   `useEffect`를 사용하여 컴포넌트 언마운트 시 `URL.revokeObjectURL(audioUrl)` 호출
+    *   `<audio>` 요소에 `key={audioUrl}` 추가하여 URL 변경 시에만 리렌더링
+
+#### 📤 전역 업로드 상태 표시 통합 (`frontend/src/pages/Recorder.tsx`)
+*   **문제:** 
+    *   녹음 파일 업로드 시 전역 업로드 상태 바(팝업)가 표시되지 않음
+    *   파일 업로드와 녹음 업로드의 UX 일관성 부족
+*   **해결:**
+    *   `useUpload` 훅을 `UploadContext`에서 가져와 사용
+    *   `handleUpload` 함수에서 `addUpload(file, title.trim())` 호출로 전역 업로드 Context에 작업 등록
+    *   로컬 `uploadProgress` 상태 제거 (전역 Context가 관리)
+    *   `UploadStatusBar` 컴포넌트가 자동으로 업로드 진행 상황 표시
+
+#### 🔄 API 레이어 데이터 변환 (`routes/meetings.py`)
+*   **문제:** 
+    *   데이터베이스의 `segment` 필드가 프론트엔드에서 `text`로 기대됨
+    *   `end_time` 필드가 데이터베이스에 저장되지 않아 프론트엔드에서 계산 필요
+*   **해결:**
+    *   `get_meeting_data` 함수에서 API 응답 시 `segment` → `text` 변환
+    *   각 세그먼트의 `end_time` 계산 (다음 세그먼트의 `start_time` 또는 기본값 5초)
+    *   Adapter Pattern 적용: 백엔드 데이터 구조와 프론트엔드 기대 구조를 API 레이어에서 변환
+
+### 3. 기술적 특징 (Technical Notes)
+
+#### 세그먼트 동기화 알고리즘
+*   **사용자 선택 우선:** `userSelectedSegmentId`가 설정되어 있으면 재생 중에도 우선 적용
+*   **정확한 범위 매칭:** 현재 재생 시간이 세그먼트의 `start_time`과 `end_time` 사이에 정확히 있을 때만 선택
+*   **조건부 가장 가까운 세그먼트:** 모든 세그먼트 범위에서 2초 이상 떨어져 있을 때만 가장 가까운 세그먼트 선택
+*   **거리 계산:** `Math.abs(currentTime - segment.start_time)`로 거리 계산
+
+#### 언어 자동 감지
+*   Whisper 모델의 자동 언어 감지 기능 활용
+*   `language=None` 전달 시 모델이 오디오의 언어를 자동으로 감지
+*   감지된 언어는 로그에 출력 (`logger.info(f"Detected language: {info.language}")`)
+
+#### Blob URL 메모리 관리
+*   `URL.createObjectURL`로 생성된 Blob URL은 명시적으로 해제해야 메모리 누수 방지
+*   `useMemo`로 URL 재생성 방지
+*   `useEffect` cleanup 함수에서 `URL.revokeObjectURL` 호출
+
+#### 전역 상태 관리 (UploadContext)
+*   모든 업로드 작업(파일 업로드, 녹음 업로드)을 하나의 Context에서 관리
+*   `UploadStatusBar` 컴포넌트가 전역적으로 업로드 진행 상황 표시
+*   SSE(Server-Sent Events)를 통한 실시간 진행률 업데이트
+
+### 4. 향후 계획 (Next Steps)
+- 태그 기반 필터링 기능 추가 (선택 사항으로 제외)
+- 모바일/웹 페이지 분리 고려 (향후)
+
+---
+
+## 2025년 12월 29일 - 오디오 플레이어 고도화 및 영상 재생 기능 추가
+
+### 1. 개요 (Overview)
+노트 상세 페이지의 오디오 플레이어에 재생 속도 조절, 구간 반복 재생, 파형 시각화 기능을 추가하고, 비디오 파일 재생 기능을 구현함. 이를 통해 사용자가 회의록을 더 효율적으로 검토하고 필요한 구간을 반복하여 들을 수 있도록 개선함.
+
+### 2. 주요 변경 사항 (Changes)
+
+#### ⚡ 재생 속도 조절 기능 (`frontend/src/pages/NoteDetail.tsx`)
+*   **구현 내용:**
+    *   재생 속도 상태 추가: `playbackRate` (기본값 1.0)
+    *   재생 속도 옵션: 0.5x, 0.75x, 1.0x, 1.25x, 1.5x, 1.75x, 2.0x
+    *   드롭다운 UI로 재생 속도 선택
+    *   오디오/비디오 요소에 `playbackRate` 속성 적용
+*   **사용자 가치:** 긴 회의록을 빠르게 검토하거나, 빠른 발화를 천천히 들을 수 있음
+
+#### 🔁 구간 반복 재생 기능 (`frontend/src/pages/NoteDetail.tsx`)
+*   **구현 내용:**
+    *   구간 반복 상태: `loopStart`, `loopEnd`, `isLooping`
+    *   반복 시작점/끝점 설정 버튼 (A-B 마커)
+    *   반복 재생 토글 버튼
+    *   반복 구간 초기화 버튼
+    *   재생바에 반복 구간 하이라이트 표시
+    *   `handleTimeUpdate`에서 반복 구간 도달 시 자동으로 시작점으로 이동
+*   **사용자 가치:** 중요한 구간을 반복하여 들을 수 있어 이해도 향상
+
+#### 📊 파형 시각화 기능 (`frontend/src/pages/NoteDetail.tsx`)
+*   **구현 내용:**
+    *   WaveSurfer.js 라이브러리 설치 및 통합
+    *   파형 시각화 토글 버튼 추가 (오디오만)
+    *   파형 클릭 시 해당 시간으로 이동
+    *   오디오 재생과 파형 시각화 동기화
+    *   재생 속도 동기화
+*   **사용자 가치:** 시각적으로 오디오 파형을 확인하고 정확한 위치로 이동 가능
+
+#### 🎬 영상 재생 기능 (`routes/meetings.py`, `frontend/src/pages/NoteDetail.tsx`)
+*   **백엔드 변경:**
+    *   `get_meeting_data` API에 `is_video` 필드 추가
+    *   파일 확장자로 비디오 여부 판단 (`.mp4`, `.webm`, `.mov`, `.avi`, `.mkv`)
+*   **프론트엔드 변경:**
+    *   `MeetingDetail` 인터페이스에 `is_video` 필드 추가
+    *   비디오인 경우 `<video>` 태그 사용, 오디오인 경우 `<audio>` 태그 사용
+    *   오디오/비디오 모두 동일한 컨트롤 사용 (재생, 일시정지, 재생 속도, 구간 반복)
+    *   비디오 플레이어에 최대 높이 제한 (400px)
+*   **사용자 가치:** 업로드하거나 녹화한 영상 파일을 직접 재생 가능
+
+### 3. 기술적 특징 (Technical Notes)
+
+#### 재생 속도 조절
+*   HTML5 Media API의 `playbackRate` 속성 활용
+*   오디오와 비디오 모두 지원 (0.5x ~ 2.0x)
+*   재생 속도 변경 시 즉시 적용
+
+#### 구간 반복 재생
+*   `timeupdate` 이벤트에서 반복 구간 감지
+*   반복 구간 도달 시 `currentTime`을 `loopStart`로 설정
+*   재생바에 시각적 하이라이트로 반복 구간 표시
+
+#### 파형 시각화 (WaveSurfer.js)
+*   WebAudio 백엔드 사용
+*   오디오 재생과 파형 시각화 동기화
+*   파형 클릭 시 `seek` 이벤트로 오디오 시간 이동
+*   재생 속도 변경 시 파형도 동기화
+
+#### 오디오/비디오 통합
+*   `media` 변수로 오디오/비디오 요소를 동적으로 선택
+*   모든 이벤트 리스너와 컨트롤이 오디오/비디오 모두에서 작동
+*   비디오는 시각적 재생, 오디오는 파형 시각화 제공
+
+### 4. 향후 계획 (Next Steps)
+- 모바일/웹 페이지 분리 고려 (향후)
+- 추가 UX 개선 사항 검토
+
+---
+
+## 2025년 12월 29일 - 대용량 처리 비동기화 작업 계획 수립
+
+### 1. 개요 (Overview)
+현재 시스템의 동기 처리 방식에서 발생하는 문제점을 해결하기 위해 비동기 처리 시스템 도입을 계획함. 단계적 접근을 통해 복잡도를 관리하면서 확장성과 안정성을 확보하는 것을 목표로 함.
+
+### 2. 현재 시스템 분석
+
+#### 2.1 처리 방식
+- **동기 처리**: 파일 업로드 → 비디오 변환 → STT → 요약 → 마인드맵 (순차 실행)
+- **SSE 스트리밍**: 실시간 진행 상황 전달
+- **총 소요 시간**: 2-7분 (파일 크기 및 길이에 따라)
+
+#### 2.2 문제점
+1. **블로킹 작업**: STT, 요약, 마인드맵이 순차 실행되어 총 처리 시간이 길음
+2. **동시 처리 제한**: 여러 사용자가 동시에 업로드 시 서버 부하 및 타임아웃 위험
+3. **에러 복구 어려움**: 중간 단계 실패 시 전체 재시작 필요
+4. **리소스 낭비**: 대기 시간 동안 워커가 블로킹됨
+
+### 3. 비동기화 방안
+
+#### 3.1 아키텍처 개요
+```
+사용자 업로드
+  ↓
+파일 저장 (즉시 완료)
+  ↓
+작업 큐에 등록 (Celery Task 또는 Redis Queue)
+  ↓
+즉시 응답 (HTTP 202 Accepted)
+  ↓
+[백그라운드]
+  ├─ 비디오 변환 (Worker 1)
+  ├─ STT 처리 (Worker 2)
+  ├─ 요약 생성 (Worker 3)
+  └─ 마인드맵 생성 (Worker 4)
+  ↓
+완료 시 Webhook/SSE로 알림
+```
+
+#### 3.2 단계적 접근 전략
+
+**Phase 1: 경량 비동기화 (우선 권장)**
+- Redis Queue만 사용 (Celery 없이)
+- 별도 Worker 프로세스 실행
+- 구현 단순, 빠른 적용 가능
+- **예상 작업 시간**: 8-12시간
+
+**Phase 2: Celery 도입 (확장 필요 시)**
+- Worker 관리 자동화
+- 재시도 및 모니터링 강화
+- 대규모 확장 대비
+- **예상 작업 시간**: 16-24시간
+
+### 4. 구현 고려사항
+
+#### 4.1 복잡도 증가
+- **현재**: 한 파일에 모든 로직 (디버깅 쉬움)
+- **비동기화 후**: 여러 프로세스 분산 (디버깅 복잡)
+- **해결 방안**: 
+  - 단계적 도입으로 복잡도 관리
+  - 로깅 및 모니터링 강화
+  - 문서화 철저히
+
+#### 4.2 상태 관리
+- **필요성**: 작업이 백그라운드에서 실행되므로 상태 저장 필요
+- **구현 방법**:
+  - Redis에 상태 저장 (경량 방식)
+  - 데이터베이스에 상태 저장 (영구 보관)
+  - Celery 자동 상태 관리 (Celery 사용 시)
+
+#### 4.3 프론트엔드 변경
+- **현재**: SSE로 실시간 진행 상황 전달
+- **비동기화 후**: 
+  - 방법 A: 폴링 (5초마다 상태 확인) - 구현 간단
+  - 방법 B: WebSocket - 실시간 알림, 구현 복잡
+- **추천**: Phase 1에서는 폴링, Phase 2에서 WebSocket 고려
+
+#### 4.4 인프라 요구사항
+- **현재**: Flask 서버만 실행
+- **비동기화 후**: 
+  - Flask 서버
+  - Redis 서버 (큐 저장소)
+  - Celery Worker (작업 처리, Celery 사용 시)
+- **운영 고려사항**:
+  - Redis 서버 다운 시 큐 접근 불가
+  - Redis 메모리 관리 필요
+  - 백업 및 복구 계획 필요
+
+### 5. 구현 계획
+
+#### 5.1 Phase 1: 경량 비동기화 (우선)
+
+**Step 1: Redis 설치 및 설정**
+- Redis 서버 설치 (Docker 또는 직접 설치)
+- Redis 연결 설정
+- **예상 시간**: 1-2시간
+
+**Step 2: 간단한 큐 시스템 구현**
+- Redis Queue 사용
+- 작업 등록 함수 구현
+- **예상 시간**: 2-3시간
+
+**Step 3: Worker 프로세스 구현**
+- 별도 Python 스크립트로 Worker 실행
+- 큐에서 작업 가져와서 처리
+- **예상 시간**: 3-4시간
+
+**Step 4: API 엔드포인트 수정**
+- `/upload` 엔드포인트: 즉시 응답 (202 Accepted)
+- `/api/upload/status/<task_id>`: 상태 조회 API
+- **예상 시간**: 2-3시간
+
+**Step 5: 프론트엔드 수정**
+- 폴링 방식으로 상태 확인
+- 진행 상황 표시
+- **예상 시간**: 2-3시간
+
+#### 5.2 Phase 2: Celery 도입 (향후)
+
+**Step 1: Celery 설정**
+- `celery_app.py` 생성
+- Redis를 브로커로 설정
+- **예상 시간**: 2-3시간
+
+**Step 2: 작업 분리**
+- `tasks/upload_tasks.py` 생성
+- 각 단계별 Task 함수 구현
+- **예상 시간**: 4-6시간
+
+**Step 3: 작업 체인 구성**
+- 순차 실행을 위한 체인 구성
+- 에러 처리 및 재시도 로직
+- **예상 시간**: 3-4시간
+
+**Step 4: 모니터링 도구**
+- Flower (Celery 모니터링) 설치
+- 작업 상태 대시보드
+- **예상 시간**: 2-3시간
+
+### 6. 장점 및 기대 효과
+
+#### 6.1 장점
+1. **비동기 처리**: 업로드 후 즉시 응답, 백그라운드에서 처리
+2. **확장성**: Worker 추가로 처리량 증가 가능
+3. **안정성**: 실패 시 자동 재시도, 작업 상태 추적
+4. **리소스 효율**: Worker 풀 관리로 리소스 활용 개선
+
+#### 6.2 기대 효과
+- **사용자 경험**: 업로드 후 즉시 응답으로 대기 시간 감소
+- **서버 안정성**: 동시 업로드 처리 능력 향상
+- **확장성**: 트래픽 증가에 대응 가능
+
+### 7. 리스크 및 대응 방안
+
+#### 7.1 리스크
+1. **복잡도 증가**: 여러 프로세스 관리 필요
+2. **인프라 추가**: Redis 서버 운영 필요
+3. **디버깅 어려움**: 분산된 프로세스 추적 필요
+
+#### 7.2 대응 방안
+1. **단계적 도입**: Phase 1부터 시작하여 점진적 확장
+2. **문서화**: 각 단계별 상세 문서 작성
+3. **모니터링**: 로깅 및 상태 추적 강화
+4. **테스트**: 단위 테스트 및 통합 테스트 철저히
+
+### 8. 다음 단계
+1. **현재 상태 확인**: 동시 업로드 빈도 및 처리 시간 측정
+2. **Phase 1 구현 시작**: Redis 설치 및 경량 큐 시스템 구현
+3. **테스트**: 소규모 테스트 후 점진적 확장
+
+---
+
+## 2026년 6월 12일 - 문서·코드 정합성 점검 + 보안 패치 + PRD 신규 작성
+
+### 1. 목표 (무엇을·왜)
+- 문서(README 등)와 실제 코드(Supabase 전환 후)의 불일치 해소
+- 하드코딩/보안 이슈 점검 및 수정
+- 기술 스택 적절성 검토 + 2026-06 기준 임베딩 모델 리서치
+- 프로젝트 취지·방향성을 반영한 PRD 신규 작성
+
+### 2. 주요 변경 사항 (어떻게)
+
+#### 🔒 보안 (우선순위 1)
+- `routes/google_auth.py`: `OAUTHLIB_INSECURE_TRANSPORT`(HTTPS 우회)를 `config.DEBUG`일 때만 적용하도록 게이팅 (프로덕션 평문 OAuth 차단)
+- `routes/google_auth.py`: 콜백 리다이렉트 `http://localhost:5173/` 하드코딩 → `config.FRONTEND_URL`
+- `config.py`: `FRONTEND_URL` 추가(미설정 시 `ALLOWED_ORIGINS[0]` 폴백), `.env.example` 문서화
+
+#### 🧹 룰 준수 — 하드코딩 제거 (우선순위 4)
+- `config.py`: `EMBEDDING_MODEL` 상수 추가(기본 `text-embedding-ada-002`, 현행 동작 보존)
+- `database/vector_manager.py`: `OpenAIEmbeddings(model=config.EMBEDDING_MODEL)` 적용 (모델 교체 없이 설정화만 — 사용자 결정)
+
+#### 📄 문서 정합성 (우선순위 2)
+- `README.md`: Firebase→Supabase Auth, SQLite→Supabase(DB_TYPE) 반영. 인증/기술스택/설치(2.2·2.3)/문제해결/배포 환경변수/DB 스키마 정정. 깨진 `init_db.py`·`firebase-adminsdk.json` 안내 제거
+
+#### 🗂️ 정리 (우선순위 3)
+- 중복 172KB `docs/architecture/13.cursor_.md` 삭제(archive 사본과 바이트 동일, archive 유지)
+- `test_diarization_service.py` → `tests/`, `whisper_model.ipynb` → `experiments_stt/` 이동(이동 후 루트경로 가정 수정)
+
+#### 📋 PRD 신규 작성
+- `docs/planning/PRD.md` 생성 — 비전/문제정의/목표·비목표/페르소나/유스케이스/기능요구(FR, MoSCoW+상태)/비기능요구(성능·비용·보안·확장성)/아키텍처/데이터모델/성공지표/릴리스계획/리스크/미해결결정 포함
+- `README.md` 문서 안내 및 `docs/README.md` 인덱스에 PRD 등록
+
+### 3. 주요 결정 및 이유
+- **임베딩**: 모델 교체 시 차원 변경→전체 재임베딩 필요. 이번엔 **config 상수화만**, 모델 전환(Gemini/BGE-M3)은 추후 별도 결정
+- **임베딩 리서치(2026-06)**: gemini-embedding-001(MTEB 다국어 ~68.3, 한국어 최상위, Gemini 키 단일화) 또는 BGE-M3 자체호스팅(무비용) 권장
+- **스택 제언**: DB 3중화(Supabase+ChromaDB+SQLite) 해소 위해 ChromaDB→pgvector 통합 검토(재임베딩 시점에 함께)
+- `experiments_stt/`는 프로덕션 미import 확인 → 사용자 sandbox로 보존(삭제 보류)
+
+### 4. 검증
+- 변경 파일 `py_compile` 통과, Repository 테스트 21건 OK(회귀 없음)
+
+### 5. 알려진 이슈 / 향후
+- README 프로젝트 구조 트리에 일부 옛 파일명(`firebase_service.py` 등) 잔존 — 가독성 폴리시 수준, 미수정
+- 임베딩 모델/벡터스토어/ experiments_stt 처리 = 의사결정 대기(PRD §13)
+
+---
+
+## 2026년 6월 13일 - STT/LLM 로컬화 평가 (Gemma 4 / gpt-oss) 및 점진 교체 결정
+
+### 1. 목표
+- 무거운 로컬 STT(faster-whisper + pyannote, GPU 필요)와 투 트랙 부담 개선 방안 검토
+- 오픈 모델(Gemma 4 12B, gpt-oss-120b/20b)을 STT·화자분리·텍스트 단계에 적용 가능한지 평가
+
+### 2. 검토 결과 (공식 모델 카드/문서 + 웹 리서치 근거)
+- **gpt-oss-120b·20b**: 텍스트 전용 → 오디오 입력 불가 → STT/화자분리 **제외**(텍스트 단계만 후보, 16GB는 20b)
+- **Gemma 4 12B**: 네이티브 ASR/AST 가능하나 **30초 상한·화자분리/타임스탬프 미문서화·모노 강제 + 생성형 자체 교정** → STT 주엔진 **부적합**
+- **"Gemma STT + pyannote 유지"안**: 역전 파이프라인만 성립하나 pyannote 잔존 + 12B 수백 회 추론으로 **부하 증가**, 타임스탬프·confidence 상실 → 기각
+- 참고: 과거 Gemini 2.5 Pro 성공 결과는 LLM **자체 교정** 영향(사용자 확인). Gemma도 동일 본질
+
+### 3. 결정
+- **현 파이프라인 유지**, 이후 단계별 검증·교체(S1 whisper-turbo 경량화 → S2 화자분리/단일트랙 → S3 텍스트 단계 로컬 LLM → S4 임베딩/벡터스토어)
+- 원칙: "듣는 일(STT)은 음향 특화 엔진, 쓰는 일(교정·요약)은 LLM" 분업
+
+### 4. 산출물
+- 신규 문서 [docs/planning/stt_llm_localization_eval.md](../planning/stt_llm_localization_eval.md)
+- PRD §13(결정 완료), 로드맵 Phase 5(비용 최적화), docs 인덱스에 연결
 
 ---

@@ -3,9 +3,9 @@ import os
 from pathlib import Path
 import json
 
-# 프로젝트 루트 경로 설정
+# 프로젝트 루트 경로 설정 (tests/ 의 상위 디렉토리가 루트)
 current_dir = Path(__file__).parent
-root_dir = current_dir  # 스크립트가 루트에 있으므로 현재 디렉토리가 루트임
+root_dir = current_dir.parent
 sys.path.append(str(root_dir))
 
 from services.diarization import diarization_service

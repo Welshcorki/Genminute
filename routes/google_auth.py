@@ -1,107 +1,104 @@
 """
-Google OAuth 2.0 인증 관련 라우트 (로그인 및 캘린더 연동)
+Google OAuth 2.0 — 캘린더 연동 전용 라우트
+
+NOTE: 로그인(Google OAuth) 기능은 Supabase Auth로 전환되었습니다.
+이 모듈은 캘린더 API 접근 권한(google.calendar.events)을 획득하고
+크리덴셜을 DB에 저장하는 기능만 담당합니다.
 """
-from flask import Blueprint, request, url_for, redirect, session, current_app, jsonify
 import google_auth_oauthlib.flow
 import google.oauth2.credentials
-from google.oauth2 import id_token
-from google.auth.transport import requests
 import json
 import os
 import logging
 
+from flask import Blueprint, request, url_for, redirect, session, jsonify
+
 from config import config
-from database.sqlite_manager import DatabaseManager
-from services.user_service import get_or_create_user
+from database import get_db_manager
 
 logger = logging.getLogger(__name__)
 
-# 개발 환경에서 HTTP를 허용하기 위한 설정 (OAuth 2.0 InsecureTransportError 해결)
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+# 개발 환경(DEBUG)에서만 HTTP를 허용 (OAuth 2.0 InsecureTransportError 해결).
+# 프로덕션에서는 HTTPS를 강제해야 하므로 절대 설정하지 않는다.
+if config.DEBUG:
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
-# Blueprint 생성 (URL Prefix 없음 -> 함수 데코레이터에서 지정)
 google_auth_bp = Blueprint('google_auth', __name__)
 
-# 데이터베이스 매니저 초기화
-db = DatabaseManager(str(config.DATABASE_PATH))
+db = get_db_manager()
 
-# OAuth 2.0 설정
-# 이 client_config는 Google API Console에서 다운로드한 client_secret.json 파일의 내용과 동일한 구조입니다.
+# Google OAuth 클라이언트 설정
+# project_id는 client_secret.json 스펙의 선택 필드 — 실제 토큰 교환에 미사용
 CLIENT_CONFIG = {
     "web": {
         "client_id": config.GOOGLE_CLIENT_ID,
-        "project_id": config.FIREBASE_PROJECT_ID,
+        "project_id": config.GOOGLE_PROJECT_ID,
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": config.GOOGLE_CLIENT_SECRET,
         "redirect_uris": [
-            # 실제 운영 시에는 https 주소 사용
             f"http://localhost:{config.PORT}/oauth2callback",
             f"http://127.0.0.1:{config.PORT}/oauth2callback"
         ]
     }
 }
 
-# 필요한 Google API 범위(scope) 정의
-# openid, email, profile: 로그인용
-# calendar.events: 캘린더 연동용
+# 캘린더 API 접근 권한 스코프
 SCOPES = [
-    'openid', 
-    'https://www.googleapis.com/auth/userinfo.email', 
+    'openid',
+    'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile',
     'https://www.googleapis.com/auth/calendar.events'
 ]
 
 
-@google_auth_bp.route('/google/login')
-def google_login():
+@google_auth_bp.route('/google/calendar/authorize')
+def google_calendar_authorize():
     """
-    Google 로그인을 시작합니다.
+    Google 캘린더 연동 OAuth 시작.
+    이미 Supabase로 로그인한 사용자가 캘린더 API 접근 권한을 추가로 허용할 때 사용합니다.
+
+    Returns:
+        Google OAuth 동의 화면으로 리다이렉트
     """
-    # 리다이렉트 URI (백엔드 포트 사용)
-    # url_for를 사용하면 현재 요청 호스트(localhost 등)에 맞춰 자동 생성됨
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': '로그인이 필요합니다.'}), 401
+
     redirect_uri = url_for('google_auth.oauth2callback', _external=True)
-    
-    # OAuth 2.0 플로우 객체 생성
+
     flow = google_auth_oauthlib.flow.Flow.from_client_config(
         client_config=CLIENT_CONFIG,
         scopes=SCOPES,
         redirect_uri=redirect_uri
     )
 
-    # 사용자를 인증 URL로 리디렉션
     authorization_url, state = flow.authorization_url(
-        access_type='offline', # refresh_token을 받기 위해 필수
-        prompt='consent', # 항상 동의 화면을 표시하여 refresh_token을 다시 받도록 유도
+        access_type='offline',
+        prompt='consent',
         include_granted_scopes='true'
     )
-    
-    # CSRF 방지를 위해 state 값을 세션에 저장
-    session['google_oauth_state'] = state
-    
-    logger.info(f"🔗 Google 로그인 리다이렉트 시작: {redirect_uri}")
 
+    session['google_oauth_state'] = state
+
+    logger.info(f"🔗 캘린더 연동 OAuth 시작: {redirect_uri}")
     return redirect(authorization_url)
 
 
 @google_auth_bp.route('/oauth2callback')
 def oauth2callback():
     """
-    Google 인증 후 리디렉션되는 콜백 URL.
-    1. 인증 코드로 토큰 교환
-    2. ID 토큰 검증 및 사용자 정보 추출
-    3. DB 사용자 조회/생성 및 세션 로그인 처리
-    4. 프론트엔드로 리다이렉트
+    Google OAuth 콜백 — 캘린더 크리덴셜 저장 전용.
+
+    NOTE: 로그인 처리는 Supabase Auth에서 담당합니다.
+    이 엔드포인트는 캘린더 API 접근을 위한 OAuth 토큰만 DB에 저장합니다.
     """
-    # CSRF 공격 방지를 위해 state 값 비교
     state = session.get('google_oauth_state')
     if not state or state != request.args.get('state'):
-        logger.error("❌ Google 로그인 실패: Invalid state parameter")
+        logger.error("❌ Google OAuth 콜백 실패: Invalid state parameter")
         return 'Invalid state parameter', 400
 
     try:
-        # 플로우 객체 재생성
         flow = google_auth_oauthlib.flow.Flow.from_client_config(
             client_config=CLIENT_CONFIG,
             scopes=SCOPES,
@@ -109,62 +106,26 @@ def oauth2callback():
             redirect_uri=url_for('google_auth.oauth2callback', _external=True)
         )
 
-        # Google로부터 받은 인증 코드로 토큰 교환
-        authorization_response = request.url
-        flow.fetch_token(authorization_response=authorization_response)
-
-        # 획득한 인증 정보
+        flow.fetch_token(authorization_response=request.url)
         credentials = flow.credentials
-        
-        # ID 토큰 검증 및 사용자 정보 추출
-        # verify_oauth2_token은 토큰 서명을 검증하고 payload를 반환합니다.
-        id_info = id_token.verify_oauth2_token(
-            credentials.id_token,
-            requests.Request(),
-            config.GOOGLE_CLIENT_ID,
-            clock_skew_in_seconds=10
-        )
-        
-        email = id_info.get('email')
-        google_id = id_info.get('sub')
-        name = id_info.get('name')
-        picture = id_info.get('picture')
-        
-        logger.info(f"✅ Google 인증 성공: {email}")
 
-        # DB에서 사용자 조회 또는 생성
-        user = get_or_create_user(
-            google_id=google_id,
-            email=email,
-            name=name,
-            profile_picture=picture
-        )
-        
-        # 세션 생성 (로그인 처리)
-        session['user_id'] = user['id']
-        session['email'] = user['email']
-        session['name'] = user.get('name', '')
-        session['role'] = user['role']
-        session['profile_picture'] = user.get('profile_picture', '')
-        session.permanent = True # 브라우저 닫아도 유지 (설정에 따름)
+        # 캘린더 크리덴셜 DB 저장 (이미 Supabase 세션으로 로그인된 user_id 기준)
+        user_id = session.get('user_id')
+        if user_id:
+            creds_json = credentials_to_dict(credentials)
+            db.update_user_google_credentials(user_id, json.dumps(creds_json))
+            logger.info(f"✅ 캘린더 크리덴셜 저장 완료: user_id={user_id}")
+        else:
+            logger.warning("⚠️ 세션에 user_id 없음 — 캘린더 크리덴셜 저장 불가")
 
-        # 캘린더 연동을 위한 Credentials DB 저장
-        creds_json = credentials_to_dict(credentials)
-        db.update_user_google_credentials(user['id'], json.dumps(creds_json))
-        
-        # 프론트엔드 홈으로 리다이렉트 (하드코딩된 포트 대신 설정이나 환경변수 사용 권장)
-        # 현재는 Vite 개발 서버 포트(5173) 사용
-        frontend_url = "http://localhost:5173/"
-        logger.info(f"🚀 프론트엔드로 리다이렉트: {frontend_url}")
-        
-        return redirect(frontend_url)
+        return redirect(config.FRONTEND_URL)
 
     except Exception as e:
-        logger.error(f"❌ Google 로그인 콜백 처리 중 오류: {e}", exc_info=True)
-        return f"로그인 처리 중 오류가 발생했습니다: {str(e)}", 500
+        logger.error(f"❌ Google OAuth 콜백 처리 중 오류: {e}", exc_info=True)
+        return f"캘린더 연동 중 오류가 발생했습니다: {str(e)}", 500
 
 
-def credentials_to_dict(credentials):
+def credentials_to_dict(credentials) -> dict:
     """
     google.oauth2.credentials.Credentials 객체를 직렬화 가능한 딕셔너리로 변환합니다.
     """

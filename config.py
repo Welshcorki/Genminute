@@ -24,20 +24,30 @@ class Config:
     UPLOAD_FOLDER = BASE_DIR / "uploads"
     DATABASE_FOLDER = BASE_DIR / "database"
     DATABASE_PATH = DATABASE_FOLDER / "minute_ai.db"
+    
+    # 사용할 데이터베이스 타입: 'sqlite' 또는 'supabase' (기본값: supabase)
+    DB_TYPE: str = os.getenv('DB_TYPE', 'supabase').lower()
+    
+    FRONTEND_BUILD_DIR = BASE_DIR / "frontend" / "dist"  # React 빌드 파일 경로
 
     # ==================== Flask 설정 ====================
     SECRET_KEY: str = os.getenv('FLASK_SECRET_KEY', '')
     DEBUG: bool = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     PORT: int = int(os.getenv('FLASK_PORT', '5000'))
+    
+    # CORS 허용 오리진 (쉼표로 구분, 기본값: 개발 환경)
+    _allowed_origins_str = os.getenv('ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173')
+    ALLOWED_ORIGINS: list[str] = [origin.strip() for origin in _allowed_origins_str.split(',') if origin.strip()]
+    logger.debug(f"ALLOWED_ORIGINS initialized: {ALLOWED_ORIGINS} (count: {len(ALLOWED_ORIGINS)})")
 
-    # ==================== Firebase 설정 ====================
-    FIREBASE_API_KEY: str = os.getenv('FIREBASE_API_KEY', '')
-    FIREBASE_AUTH_DOMAIN: str = os.getenv('FIREBASE_AUTH_DOMAIN', '')
-    FIREBASE_PROJECT_ID: str = os.getenv('FIREBASE_PROJECT_ID', '')
-    FIREBASE_STORAGE_BUCKET: str = os.getenv('FIREBASE_STORAGE_BUCKET', '')
-    FIREBASE_MESSAGING_SENDER_ID: str = os.getenv('FIREBASE_MESSAGING_SENDER_ID', '')
-    FIREBASE_APP_ID: str = os.getenv('FIREBASE_APP_ID', '')
-    FIREBASE_MEASUREMENT_ID: str = os.getenv('FIREBASE_MEASUREMENT_ID', '')
+    # 프론트엔드 베이스 URL (OAuth 콜백 후 리다이렉트 대상)
+    # 미설정 시 첫 번째 허용 오리진으로 폴백 (개발 환경: http://localhost:5173)
+    FRONTEND_URL: str = os.getenv('FRONTEND_URL', '') or (ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else 'http://localhost:5173')
+
+    # ==================== Supabase 설정 ====================
+    SUPABASE_URL: str = os.getenv('SUPABASE_URL', '')
+    SUPABASE_ANON_KEY: str = os.getenv('SUPABASE_ANON_KEY', '')
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
 
     # ==================== API 키 ====================
     OPENAI_API_KEY: str = os.getenv('OPENAI_API_KEY', '')
@@ -46,16 +56,33 @@ class Config:
     # [Merged] Hugging Face Token (Local STT)
     HF_TOKEN: str = os.getenv('HUGGINGFACEHUB_API_TOKEN', '') or os.getenv('HF_TOKEN', '')
     
-    # [Merged] Google Calendar Client (Calendar Feature)
+    # ==================== Google Calendar 연동 ====================
     GOOGLE_CLIENT_ID: str = os.getenv('GOOGLE_CLIENT_ID', '')
     GOOGLE_CLIENT_SECRET: str = os.getenv('GOOGLE_CLIENT_SECRET', '')
+    # Google Cloud Console 프로젝트 ID (캘린더 OAuth에 사용, 선택 필드)
+    GOOGLE_PROJECT_ID: str = os.getenv('GOOGLE_PROJECT_ID', '')
+
 
     # ==================== 파일 업로드 설정 ====================
     ALLOWED_EXTENSIONS: Set[str] = {"wav", "mp3", "m4a", "flac", "mp4", "webm"}
     MAX_FILE_SIZE_MB: int = 500
     UPLOAD_TIMEOUT_SECONDS: int = 1200  # 20분
 
-    # ==================== STT 설정 ====================
+    # ==================== STT 엔진 설정 ====================
+    # "local" : faster-whisper + pyannote (GPU 권장, 무료)
+    # "gemini": Gemini API STT + 화자분리 (GPU 불필요, API 비용 발생)
+    STT_ENGINE: str = os.getenv('STT_ENGINE', 'local')
+
+    # Gemini 모델명 (요약, 회의록, 마인드맵, 챗봇 등에 공통 사용)
+    GEMINI_MODEL: str = os.getenv('GEMINI_MODEL', 'gemini-3-flash')
+
+    # ==================== 임베딩 모델 설정 ====================
+    # 벡터 DB(ChromaDB) 임베딩에 사용하는 모델.
+    # ⚠️ 기존 벡터와 차원이 호환되어야 하므로, 모델 교체 시 전체 재임베딩이 필요하다.
+    # 기본값은 현재 코드가 의존하던 OpenAIEmbeddings 라이브러리 기본 모델과 동일하게 고정.
+    EMBEDDING_MODEL: str = os.getenv('EMBEDDING_MODEL', 'text-embedding-ada-002')
+
+    # ==================== STT 기타 설정 ====================
     DEFAULT_TIME_INCREMENT_SECONDS: float = 5.0
 
     # ==================== 청킹(Chunking) 설정 ====================
@@ -74,36 +101,40 @@ class Config:
     LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
     LOG_FORMAT: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
-    @classmethod
-    def get_firebase_config(cls) -> dict:
-        """Firebase 클라이언트 설정 반환 (템플릿용)"""
-        return {
-            'apiKey': cls.FIREBASE_API_KEY,
-            'authDomain': cls.FIREBASE_AUTH_DOMAIN,
-            'projectId': cls.FIREBASE_PROJECT_ID,
-            'storageBucket': cls.FIREBASE_STORAGE_BUCKET,
-            'messagingSenderId': cls.FIREBASE_MESSAGING_SENDER_ID,
-            'appId': cls.FIREBASE_APP_ID,
-            'measurementId': cls.FIREBASE_MEASUREMENT_ID
-        }
+
 
     @classmethod
     def validate(cls) -> tuple[bool, list[str]]:
         """
         필수 환경 변수 검증
 
+        필수: FLASK_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY, GOOGLE_API_KEY
+        조건부:
+          - HF_TOKEN: STT_ENGINE=local 일 때만 필수
+          - GOOGLE_CLIENT_ID/SECRET: 캘린더 연동 사용 시 필수
+
         Returns:
             (is_valid, missing_vars): 검증 결과와 누락된 변수 목록
         """
+        # 항상 필수인 변수
         required_vars = [
             ('FLASK_SECRET_KEY', cls.SECRET_KEY),
-            ('FIREBASE_API_KEY', cls.FIREBASE_API_KEY),
+            ('SUPABASE_URL', cls.SUPABASE_URL),
+            ('SUPABASE_SERVICE_ROLE_KEY', cls.SUPABASE_SERVICE_ROLE_KEY),
             ('OPENAI_API_KEY', cls.OPENAI_API_KEY),
             ('GOOGLE_API_KEY', cls.GOOGLE_API_KEY),
-            ('HF_TOKEN', cls.HF_TOKEN),
-            ('GOOGLE_CLIENT_ID', cls.GOOGLE_CLIENT_ID),
-            ('GOOGLE_CLIENT_SECRET', cls.GOOGLE_CLIENT_SECRET),
         ]
+
+        # 조건부 필수 변수 (STT_ENGINE=local 일 때)
+        if cls.STT_ENGINE == 'local':
+            required_vars.append(('HF_TOKEN', cls.HF_TOKEN))
+
+        # 조건부 필수 변수 (캘린더 연동 사용 시)
+        if cls.GOOGLE_CLIENT_ID or cls.GOOGLE_CLIENT_SECRET:
+            required_vars += [
+                ('GOOGLE_CLIENT_ID', cls.GOOGLE_CLIENT_ID),
+                ('GOOGLE_CLIENT_SECRET', cls.GOOGLE_CLIENT_SECRET),
+            ]
 
         missing = [name for name, value in required_vars if not value]
 
@@ -153,11 +184,12 @@ class Config:
             return "✅ 설정됨"
 
         print("🔑 API 키 상태:")
-        print(f"   Flask Secret Key: {mask_key(cls.SECRET_KEY, show_secrets)}")
-        print(f"   Firebase API Key: {mask_key(cls.FIREBASE_API_KEY, show_secrets)}")
-        print(f"   OpenAI API Key:   {mask_key(cls.OPENAI_API_KEY, show_secrets)}")
-        print(f"   Google API Key:   {mask_key(cls.GOOGLE_API_KEY, show_secrets)}")
-        print(f"   Hugging Face:     {mask_key(cls.HF_TOKEN, show_secrets)}")
+        print(f"   Flask Secret Key:       {mask_key(cls.SECRET_KEY, show_secrets)}")
+        print(f"   Supabase URL:           {mask_key(cls.SUPABASE_URL, show_secrets)}")
+        print(f"   Supabase Service Key:   {mask_key(cls.SUPABASE_SERVICE_ROLE_KEY, show_secrets)}")
+        print(f"   OpenAI API Key:         {mask_key(cls.OPENAI_API_KEY, show_secrets)}")
+        print(f"   Google API Key:         {mask_key(cls.GOOGLE_API_KEY, show_secrets)}")
+        print(f"   Hugging Face:           {mask_key(cls.HF_TOKEN, show_secrets)}")
         print()
 
         # 관리자 설정

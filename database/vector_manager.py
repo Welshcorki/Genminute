@@ -38,7 +38,7 @@ class VectorDBManager:
             raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되지 않았습니다.")
 
         self.client = chromadb.PersistentClient(path=persist_directory)
-        self.embedding_function = OpenAIEmbeddings()
+        self.embedding_function = OpenAIEmbeddings(model=config.EMBEDDING_MODEL)
         self.upload_folder = upload_folder
 
         # DatabaseManager 인스턴스 (외부에서 주입받음, SQLite 삭제를 위해)
@@ -865,92 +865,61 @@ class VectorDBManager:
             }
         }
 
-    def update_metadata_title(self, meeting_id, new_title):
+    def _update_collection_metadata(self, collection_name: str, meeting_id: str, field_name: str, new_value: str) -> int:
         """
-        ChromaDB의 meeting_chunk와 meeting_subtopic 컬렉션에서
-        해당 meeting_id의 모든 문서 메타데이터의 title을 업데이트합니다.
+        단일 ChromaDB 컬렉션의 메타데이터 필드를 업데이트하는 헬퍼
 
         Args:
-            meeting_id (str): 회의 ID
-            new_title (str): 새로운 제목
+            collection_name: 컬렉션 키 ('chunks' 또는 'subtopic')
+            meeting_id: 회의 ID
+            field_name: 업데이트할 메타데이터 필드명
+            new_value: 새로운 값
 
         Returns:
-            dict: 업데이트 결과 {'success': bool, 'updated_chunks': int, 'updated_subtopics': int}
+            업데이트된 문서 수
         """
-        logger.info(f"\n📊 [ChromaDB 메타데이터 업데이트 시작] meeting_id = {meeting_id}")
-        logger.info("=" * 70)
+        collection = self.client.get_collection(name=self.COLLECTION_NAMES[collection_name])
+        results = collection.get(where={"meeting_id": meeting_id})
+        ids = results['ids']
+
+        if not ids:
+            logger.info(f"   ℹ️ {self.COLLECTION_NAMES[collection_name]}: 업데이트할 문서 없음")
+            return 0
+
+        updated_metadatas = []
+        for metadata in results['metadatas']:
+            updated_metadata = metadata.copy()
+            updated_metadata[field_name] = new_value
+            updated_metadatas.append(updated_metadata)
+
+        collection.update(ids=ids, metadatas=updated_metadatas)
+        count = len(ids)
+        logger.info(f"   ✅ {self.COLLECTION_NAMES[collection_name]}: {count}개 문서의 {field_name} 업데이트 완료")
+        return count
+
+    def _update_metadata_field(self, meeting_id: str, chunk_field: str, subtopic_field: str, new_value: str) -> dict:
+        """
+        chunks와 subtopic 양쪽 컬렉션의 메타데이터를 업데이트하는 공통 메서드
+
+        Args:
+            meeting_id: 회의 ID
+            chunk_field: chunks 컬렉션의 메타데이터 필드명
+            subtopic_field: subtopic 컬렉션의 메타데이터 필드명
+            new_value: 새로운 값
+
+        Returns:
+            dict: {'success': bool, 'updated_chunks': int, 'updated_subtopics': int}
+        """
+        logger.info(f"📊 [ChromaDB 메타데이터 업데이트] meeting_id={meeting_id}, field={chunk_field}/{subtopic_field}")
 
         updated_chunks = 0
         updated_subtopics = 0
 
         try:
-            # 1. meeting_chunk 컬렉션 업데이트
-            logger.info(f"[1/2] meeting_chunk 컬렉션 업데이트 중...")
+            updated_chunks = self._update_collection_metadata('chunks', meeting_id, chunk_field, new_value)
+            updated_subtopics = self._update_collection_metadata('subtopic', meeting_id, subtopic_field, new_value)
 
-            # ChromaDB 네이티브 컬렉션 가져오기
-            chunk_collection = self.client.get_collection(name=self.COLLECTION_NAMES['chunks'])
-
-            # meeting_id로 문서 조회
-            chunk_results = chunk_collection.get(
-                where={"meeting_id": meeting_id}
-            )
-
-            chunk_ids = chunk_results['ids']
-
-            if chunk_ids:
-                # 모든 문서의 메타데이터에서 title만 변경
-                updated_metadatas = []
-                for metadata in chunk_results['metadatas']:
-                    updated_metadata = metadata.copy()
-                    updated_metadata['title'] = new_title
-                    updated_metadatas.append(updated_metadata)
-
-                # 일괄 업데이트
-                chunk_collection.update(
-                    ids=chunk_ids,
-                    metadatas=updated_metadatas
-                )
-                updated_chunks = len(chunk_ids)
-                logger.info(f"   ✅ meeting_chunk: {updated_chunks}개 문서의 title 업데이트 완료")
-            else:
-                logger.info(f"   ℹ️ meeting_chunk: 업데이트할 문서 없음")
-
-            # 2. meeting_subtopic 컬렉션 업데이트
-            logger.info(f"[2/2] meeting_subtopic 컬렉션 업데이트 중...")
-
-            # ChromaDB 네이티브 컬렉션 가져오기
-            subtopic_collection = self.client.get_collection(name=self.COLLECTION_NAMES['subtopic'])
-
-            # meeting_id로 문서 조회
-            subtopic_results = subtopic_collection.get(
-                where={"meeting_id": meeting_id}
-            )
-
-            subtopic_ids = subtopic_results['ids']
-
-            if subtopic_ids:
-                # 모든 문서의 메타데이터에서 meeting_title만 변경
-                updated_metadatas = []
-                for metadata in subtopic_results['metadatas']:
-                    updated_metadata = metadata.copy()
-                    updated_metadata['meeting_title'] = new_title  # ← meeting_subtopic은 'meeting_title' 필드 사용
-                    updated_metadatas.append(updated_metadata)
-
-                # 일괄 업데이트
-                subtopic_collection.update(
-                    ids=subtopic_ids,
-                    metadatas=updated_metadatas
-                )
-                updated_subtopics = len(subtopic_ids)
-                logger.info(f"   ✅ meeting_subtopic: {updated_subtopics}개 문서의 meeting_title 업데이트 완료")
-            else:
-                logger.info(f"   ℹ️ meeting_subtopic: 업데이트할 문서 없음")
-
-            logger.info("-" * 70)
-            logger.info(f"✅ ChromaDB 메타데이터 업데이트 완료")
-            logger.info(f"   • meeting_chunk: {updated_chunks}개")
-            logger.info(f"   • meeting_subtopic: {updated_subtopics}개")
-            logger.info("=" * 70 + "\n")
+            logger.info(f"✅ ChromaDB 메타데이터 업데이트 완료: chunks={updated_chunks}, subtopics={updated_subtopics}")
 
             return {
                 'success': True,
@@ -960,7 +929,6 @@ class VectorDBManager:
 
         except Exception as e:
             logger.error(f"❌ ChromaDB 메타데이터 업데이트 실패: {e}")
-            logger.info("=" * 70 + "\n")
             return {
                 'success': False,
                 'error': str(e),
@@ -968,108 +936,13 @@ class VectorDBManager:
                 'updated_subtopics': updated_subtopics
             }
 
-    def update_metadata_date(self, meeting_id, new_date):
-        """
-        ChromaDB의 meeting_chunk와 meeting_subtopic 컬렉션에서
-        해당 meeting_id의 모든 문서 메타데이터의 meeting_date를 업데이트합니다.
+    def update_metadata_title(self, meeting_id: str, new_title: str) -> dict:
+        """meeting_id의 모든 문서의 제목 메타데이터를 업데이트합니다."""
+        return self._update_metadata_field(meeting_id, 'title', 'meeting_title', new_title)
 
-        Args:
-            meeting_id (str): 회의 ID
-            new_date (str): 새로운 날짜 (형식: "YYYY-MM-DD HH:MM:SS")
-
-        Returns:
-            dict: 업데이트 결과 {'success': bool, 'updated_chunks': int, 'updated_subtopics': int}
-        """
-        logger.info(f"\n📊 [ChromaDB 날짜 메타데이터 업데이트 시작] meeting_id = {meeting_id}")
-        logger.info("=" * 70)
-
-        updated_chunks = 0
-        updated_subtopics = 0
-
-        try:
-            # 1. meeting_chunk 컬렉션 업데이트
-            logger.info(f"[1/2] meeting_chunk 컬렉션 업데이트 중...")
-
-            # ChromaDB 네이티브 컬렉션 가져오기
-            chunk_collection = self.client.get_collection(name=self.COLLECTION_NAMES['chunks'])
-
-            # meeting_id로 문서 조회
-            chunk_results = chunk_collection.get(
-                where={"meeting_id": meeting_id}
-            )
-
-            chunk_ids = chunk_results['ids']
-
-            if chunk_ids:
-                # 모든 문서의 메타데이터에서 meeting_date만 변경
-                updated_metadatas = []
-                for metadata in chunk_results['metadatas']:
-                    updated_metadata = metadata.copy()
-                    updated_metadata['meeting_date'] = new_date
-                    updated_metadatas.append(updated_metadata)
-
-                # 일괄 업데이트
-                chunk_collection.update(
-                    ids=chunk_ids,
-                    metadatas=updated_metadatas
-                )
-                updated_chunks = len(chunk_ids)
-                logger.info(f"   ✅ meeting_chunk: {updated_chunks}개 문서의 meeting_date 업데이트 완료")
-            else:
-                logger.info(f"   ℹ️ meeting_chunk: 업데이트할 문서 없음")
-
-            # 2. meeting_subtopic 컬렉션 업데이트
-            logger.info(f"[2/2] meeting_subtopic 컬렉션 업데이트 중...")
-
-            # ChromaDB 네이티브 컬렉션 가져오기
-            subtopic_collection = self.client.get_collection(name=self.COLLECTION_NAMES['subtopic'])
-
-            # meeting_id로 문서 조회
-            subtopic_results = subtopic_collection.get(
-                where={"meeting_id": meeting_id}
-            )
-
-            subtopic_ids = subtopic_results['ids']
-
-            if subtopic_ids:
-                # 모든 문서의 메타데이터에서 meeting_date만 변경
-                updated_metadatas = []
-                for metadata in subtopic_results['metadatas']:
-                    updated_metadata = metadata.copy()
-                    updated_metadata['meeting_date'] = new_date
-                    updated_metadatas.append(updated_metadata)
-
-                # 일괄 업데이트
-                subtopic_collection.update(
-                    ids=subtopic_ids,
-                    metadatas=updated_metadatas
-                )
-                updated_subtopics = len(subtopic_ids)
-                logger.info(f"   ✅ meeting_subtopic: {updated_subtopics}개 문서의 meeting_date 업데이트 완료")
-            else:
-                logger.info(f"   ℹ️ meeting_subtopic: 업데이트할 문서 없음")
-
-            logger.info("-" * 70)
-            logger.info(f"✅ ChromaDB 날짜 메타데이터 업데이트 완료")
-            logger.info(f"   • meeting_chunk: {updated_chunks}개")
-            logger.info(f"   • meeting_subtopic: {updated_subtopics}개")
-            logger.info("=" * 70 + "\n")
-
-            return {
-                'success': True,
-                'updated_chunks': updated_chunks,
-                'updated_subtopics': updated_subtopics
-            }
-
-        except Exception as e:
-            logger.error(f"❌ ChromaDB 날짜 메타데이터 업데이트 실패: {e}")
-            logger.info("=" * 70 + "\n")
-            return {
-                'success': False,
-                'error': str(e),
-                'updated_chunks': updated_chunks,
-                'updated_subtopics': updated_subtopics
-            }
+    def update_metadata_date(self, meeting_id: str, new_date: str) -> dict:
+        """meeting_id의 모든 문서의 날짜 메타데이터를 업데이트합니다."""
+        return self._update_metadata_field(meeting_id, 'meeting_date', 'meeting_date', new_date)
 
 
 
