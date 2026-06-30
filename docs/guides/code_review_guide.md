@@ -5,7 +5,7 @@
 ---
 
 ## 📋 목차
-
+                    
 1. [변경/생성된 파일 목록](#변경생성된-파일-목록)
 2. [코드 리뷰 기준](#코드-리뷰-기준)
 3. [주요 리뷰 포인트](#주요-리뷰-포인트)
@@ -29,6 +29,41 @@
     - `POST /api/unshare/{meeting_id}/{user_id}` - 공유 해제
     - `GET /api/shared-notes` - 공유받은 노트 목록 조회 (JSON API)
   - `remove_share()` 함수 호출 시 `owner_id` 파라미터 추가
+  - **Action Items API 추가:**
+    - `POST /api/extract_action_items/{meeting_id}` - 수동 Action Item 추출
+    - `GET /api/action_items/{meeting_id}` - Action Item 목록 조회
+    - `POST /api/action_items/{id}/status` - Action Item 상태 업데이트
+  - **페이지네이션 및 필터링 API 수정:**
+    - `GET /notes_json` - 쿼리 파라미터 지원 (`page`, `per_page`, `search`, `start_date`, `end_date`)
+    - 응답 형식 변경: `{ success, meetings, pagination: { page, per_page, total, total_pages } }`
+
+- **`services/user_service.py`**
+  - `get_user_meetings()` 함수 확장: 페이지네이션 및 필터링 파라미터 추가
+  - `get_user_meetings_count()` 함수 추가: 필터링 조건을 포함한 총 개수 조회
+  - SQL 쿼리 최적화: WHERE 절과 HAVING 절 분리
+
+- **`database/sqlite_manager.py`**
+  - `meeting_action_items` 테이블 생성 및 인덱스 추가 (`idx_action_items_meeting`)
+  - `save_action_items(meeting_id, items)` 메서드 추가
+  - `get_action_items_by_meeting_id(meeting_id)` 메서드 추가
+  - `update_action_item_status(item_id, status)` 메서드 추가
+  - `get_action_item_meeting_id(item_id)` 메서드 추가
+  - `delete_action_items_by_meeting_id(meeting_id)` 메서드 추가
+
+- **`services/upload_service.py`**
+  - `agent_service.process()` 결과를 DB에 자동 저장하도록 수정
+  - CalendarEvent 형식 → DB 형식 변환 로직 추가 (`summary` → `content`, `start_time` → `due_date`)
+  - **언어 자동 감지:** `diarization_service.transcribe_and_diarize(audio_path, language=None)` 호출로 변경
+
+- **`services/diarization.py`**
+  - `transcribe_and_diarize` 함수에 `language: str | None = None` 파라미터 추가
+  - OpenVINO 백엔드: `generate_kwargs={"language": language}` 전달 (None이면 자동 감지)
+  - Faster-Whisper 백엔드: `language=language` 전달 (None이면 자동 감지)
+
+- **`routes/meetings.py`**
+  - `get_meeting_data` 함수 수정: API 응답 시 `segment` → `text` 변환 (Adapter Pattern)
+  - 각 세그먼트의 `end_time` 계산 (다음 세그먼트의 `start_time` 또는 기본값 5초)
+  - `upload_and_process` 함수: 모든 에러 응답을 SSE 형식으로 통일
 
 ### 프론트엔드
 
@@ -48,12 +83,18 @@
   - `updateMeetingDate()` 메서드 추가 (엔드포인트: `POST /api/update_date/{id}`)
   - `UserStats` 인터페이스 추가
   - 백엔드 응답 구조 파싱 (`{ success, stats }` → `stats` 추출)
+  - **페이지네이션 지원:** `getAllMeetings()` 함수 수정 (옵션 파라미터 추가)
+  - **타입 정의 추가:** `PaginationInfo`, `PaginatedMeetingsResponse`, `GetAllMeetingsOptions` 인터페이스
 
 - **`frontend/src/pages/NoteList.tsx`**
   - 업로드 모달 통합
   - 업로드 완료 시 목록 새로고침
   - **MoreVertical 버튼 수정:** `Link` → `button` 변경, `e.stopPropagation()` 추가
   - **카드 클릭 기능:** 카드 전체 클릭 시 상세 페이지 이동
+  - **무한 스크롤 구현:** `IntersectionObserver` API 사용
+  - **디바운싱 검색:** 검색어 입력 후 500ms 대기 후 서버 요청
+  - **날짜 범위 필터 UI:** 시작일/종료일 선택 및 필터 초기화 기능
+  - **상태 관리 개선:** `currentPage`, `hasMore`, `isLoadingMore` 상태 추가
 
 - **`frontend/src/App.tsx`**
   - `Recorder`, `NoteDetail` 라우팅 추가
@@ -67,6 +108,23 @@
   - MoreVertical 메뉴에 "공유" 옵션 추가
   - `ShareModal` 컴포넌트 연동
   - `isShareModalOpen` 상태 추가
+  - **Action Items 탭 추가:** "Action Items" 탭 추가 및 ActionItemsView 컴포넌트 연동
+  - **세그먼트 선택 로직 개선:** 사용자 선택 우선, 조건부 가장 가까운 세그먼트 (임계값 2초)
+  - **오디오 duration 처리:** `handleLoadedMetadata`, `handleDurationChange` 추가, `formatTime` 개선 (NaN/Infinity 처리)
+  - **React key prop:** 스크립트 세그먼트 맵에 `key={segment.id ?? \`segment-\${index}\`}` 추가
+
+- **`frontend/src/pages/Recorder.tsx`**
+  - **Blob URL 메모리 관리:** `PreviewSection` 컴포넌트 분리, `useMemo`로 URL 메모이제이션, `useEffect` cleanup으로 메모리 해제
+  - **전역 업로드 상태 통합:** `useUpload` 훅 사용, `addUpload` 함수로 업로드 작업 등록
+  - 로컬 `uploadProgress` 상태 제거 (전역 Context가 관리)
+
+- **`frontend/src/components/SummaryView.tsx`**
+  - **React key prop 개선:** 동적 요소의 `key`에 요소 타입 접두사 추가 (예: `key={`h1-${index}`}`)
+  - 마크다운 리스트 항목을 `<ul>` 태그로 올바르게 래핑
+
+- **`frontend/src/components/MinutesView.tsx`**
+  - **React key prop 개선:** 동적 요소의 `key`에 요소 타입 접두사 추가 (예: `key={`h1-${index}`}`)
+  - 마크다운 리스트 항목을 `<ul>` 태그로 올바르게 래핑
 
 #### 새로 생성된 파일
 
@@ -100,6 +158,11 @@
   - 공유 기능 API 서비스
   - `shareMeeting()`, `getSharedUsers()`, `unshareMeeting()`, `getSharedMeetings()` 메서드
   - `SharedUser`, `ShareResponse`, `SharedUsersResponse`, `SharedMeeting`, `SharedMeetingsResponse` 인터페이스
+
+- **`frontend/src/services/actionItems.ts`** *(신규)*
+  - Action Items API 서비스
+  - `extractActionItems()`, `getActionItems()`, `updateActionItemStatus()` 메서드
+  - `ActionItem`, `ExtractActionItemsResponse`, `GetActionItemsResponse`, `UpdateActionItemStatusResponse` 인터페이스
 
 ##### 훅 (Hooks)
 - **`frontend/src/hooks/useRecorder.ts`** *(전면 재작성)*
@@ -167,6 +230,14 @@
   - 공유 해제 기능
   - 에러/성공 메시지 표시
 
+- **`frontend/src/components/ActionItemsView.tsx`** *(신규)*
+  - Action Item 목록 표시
+  - 완료 체크박스 (상태 토글)
+  - 빈 상태 메시지 및 추출 버튼
+  - 로딩 상태 표시
+  - 날짜 표시 (한국어 형식)
+  - 완료된 항목 시각적 처리 (회색 배경, 취소선, 투명도)
+
 ##### Context (전역 상태)
 - **`frontend/src/contexts/UploadContext.tsx`** *(신규)*
   - 전역 업로드 상태 관리
@@ -194,6 +265,7 @@
   - 요약 탭 (SummaryView)
   - 마인드맵 탭 (MindmapView)
   - **회의록 탭 (MinutesView)** - 요약과 별개의 회의록 생성/조회
+  - **Action Items 탭 (ActionItemsView)** - AI 에이전트가 추출한 할 일 목록 표시 및 완료 상태 관리
   - 챗봇 탭 (ChatSidebar)
   - **편집 기능:** MoreVertical 메뉴에 제목/날짜 수정 옵션 추가
   - **인라인 편집:** 제목/날짜 클릭 시 입력 필드로 전환
@@ -1084,9 +1156,10 @@ python app.py
 - [ ] `frontend/src/pages/NoteDetail.tsx`
   - [ ] API 호출
   - [ ] 미디어 플레이어
-  - [ ] 탭 네비게이션 (스크립트, 요약, 마인드맵, 회의록, 챗봇)
+  - [ ] 탭 네비게이션 (스크립트, 요약, 마인드맵, 회의록, Action Items, 챗봇)
   - [ ] 제목/날짜 수정 기능
   - [ ] MoreVertical 메뉴 동작
+  - [ ] Action Items 탭 연동
 
 - [ ] `frontend/src/pages/NoteList.tsx`
   - [ ] 업로드 모달 통합
@@ -1119,6 +1192,36 @@ python app.py
   - [ ] SQL 쿼리 정확성
   - [ ] 에러 처리
 
+- [ ] `routes/meetings.py` - Action Items API
+  - [ ] Agent Service 초기화 및 에러 처리
+  - [ ] 권한 체크 (can_access_meeting, get_action_item_meeting_id)
+  - [ ] 회의록 텍스트 소스 선택 로직
+  - [ ] 데이터 형식 변환 (CalendarEvent → DB)
+  - [ ] 에러 처리
+
+- [ ] `database/sqlite_manager.py` - Action Items 함수
+  - [ ] 테이블 존재 여부 확인
+  - [ ] 트랜잭션 처리
+  - [ ] 상태 검증
+  - [ ] 에러 처리
+
+- [ ] `frontend/src/services/actionItems.ts`
+  - [ ] API 엔드포인트 일치
+  - [ ] 타입 정의 완전성
+  - [ ] 에러 처리
+  - [ ] 응답 파싱
+
+- [ ] `frontend/src/components/ActionItemsView.tsx`
+  - [ ] API 호출 및 에러 처리
+  - [ ] 상태 관리 (로딩, 에러)
+  - [ ] UI/UX (빈 상태, 완료 상태 표시)
+  - [ ] 상태 업데이트 로직
+
+- [ ] `frontend/src/pages/NoteDetail.tsx` - Action Items 탭
+  - [ ] 탭 추가 및 연동
+  - [ ] meetingId prop 전달
+  - [ ] 탭 순서 확인
+
 ---
 
 ## 🎯 다음 단계
@@ -1147,14 +1250,32 @@ python app.py
    - ~~ChatSidebar 구현~~ ✅ 완료
    - ~~MinutesView 구현~~ ✅ 완료 (회의록 탭)
    - ~~제목/날짜 수정 기능~~ ✅ 완료
-   - **Priority 1: 공유 기능 UI** (백엔드 API 존재)
+   - ~~Priority 1: 공유 기능 UI~~ ✅ 완료
      - 노트 공유 모달 (이메일 기반)
      - 공유 사용자 목록 조회 및 해제
      - 공유받은 노트 목록 페이지
-   - **Priority 2: AI Agent UI** (백엔드 API 존재)
+   - ~~Priority 2: AI Agent UI~~ ✅ 완료
      - Action Item 추출 및 표시
-     - Google Calendar 연동 상태 시각화
-   - **Priority 3: UX 개선** (선택)
+     - Action Item 완료 상태 관리
+     - [ ] Google Calendar 연동 상태 시각화 (선택적, 향후 개선)
+   - **Priority 3: 검색 및 필터링 고도화** (완료 ✅)
+     - [x] 날짜 범위 필터 (2025-12-29 완료)
+     - [x] 태그 기반 필터 (선택 사항으로 제외, 2025-12-29 결정)
+     - [x] 페이지네이션 구현 (무한 스크롤, 2025-12-29 완료)
+     - [x] 정렬 옵션 (토글 방식, 2025-12-29 완료)
+   - **노트 상세 페이지 및 녹음 기능 개선** (2025-12-29 완료)
+     - [x] 세그먼트 선택 로직 개선 (사용자 선택 우선, 조건부 가장 가까운 세그먼트)
+     - [x] STT 언어 자동 감지 기능 적용
+     - [x] 오디오 duration NaN/Infinity 문제 해결
+     - [x] React key prop 경고 해결
+     - [x] Recorder 페이지 오디오 플레이어 안정화 (useMemo, useEffect)
+     - [x] 전역 업로드 상태 표시 통합 (UploadContext)
+   - **Priority 4: 오디오 플레이어 고도화** (2025-12-29 완료)
+     - [x] 재생 속도 조절 (0.5x ~ 2.0x)
+     - [x] 구간 반복 재생 (A-B 마커)
+     - [x] 파형 시각화 (WaveSurfer.js)
+     - [x] 영상 재생 기능 (비디오 파일 지원)
+   - **Priority 4: UX 개선** (선택)
      - 오디오 파형 시각화 (WaveSurfer.js 도입 검토)
      - 재생 속도 조절 (0.5x ~ 2x)
      - 구간 반복 재생
@@ -1179,7 +1300,7 @@ python app.py
 
 ---
 
-**마지막 업데이트:** 2025-12-18
+**마지막 업데이트:** 2025-12-29 (오디오 플레이어 고도화 및 영상 재생 기능 완료)
 **작성자:** AI Assistant
-**버전:** 2.1 (Phase 3 핵심 기능 + Priority 1 공유 기능 UI 구현 완료)
+**버전:** 2.5 (Phase 3 핵심 기능 + Priority 1 공유 기능 UI + Priority 2 Action Items UI + Priority 3 검색/필터링 구현 + Priority 4 오디오 플레이어 고도화 완료)
 

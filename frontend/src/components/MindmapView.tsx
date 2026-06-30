@@ -7,64 +7,28 @@
  * - 계층적 트리 구조 렌더링
  */
 import { useState, useEffect } from 'react';
-import { Loader2, RefreshCw, Network, Sparkles, ChevronRight, ChevronDown } from 'lucide-react';
+import { Loader2, RefreshCw, Network, Sparkles } from 'lucide-react';
 import { mindmapService, type MindmapNode } from '../services/mindmap';
+
+import { useRef } from 'react';
+import { Transformer } from 'markmap-lib';
+import { Markmap } from 'markmap-view';
 
 interface MindmapViewProps {
   meetingId: string;
 }
 
-// 마인드맵 노드 렌더링 컴포넌트
-const MindmapNodeItem = ({ node, level = 0 }: { node: MindmapNode; level?: number }) => {
-  const [isExpanded, setIsExpanded] = useState(level < 2); // 2단계까지 기본 펼침
-  const hasChildren = node.children && node.children.length > 0;
+const transformer = new Transformer();
 
-  // 레벨별 스타일
-  const getLevelStyles = () => {
-    switch (level) {
-      case 0:
-        return 'text-xl font-bold text-indigo-600 bg-indigo-50 px-4 py-3 rounded-xl';
-      case 1:
-        return 'text-lg font-semibold text-slate-900 border-l-4 border-indigo-500 pl-4 py-2';
-      case 2:
-        return 'text-base font-medium text-slate-700 pl-4 py-1.5';
-      default:
-        return 'text-sm text-slate-600 pl-4 py-1';
-    }
-  };
-
-  return (
-    <div className={`${level > 0 ? 'ml-4' : ''}`}>
-      <div
-        className={`flex items-center gap-2 ${getLevelStyles()} ${
-          hasChildren ? 'cursor-pointer hover:bg-slate-50 rounded-lg transition-colors' : ''
-        }`}
-        onClick={() => hasChildren && setIsExpanded(!isExpanded)}
-      >
-        {hasChildren && (
-          <span className="flex-shrink-0 text-slate-400">
-            {isExpanded ? (
-              <ChevronDown className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )}
-          </span>
-        )}
-        {!hasChildren && level > 0 && (
-          <span className="w-2 h-2 bg-slate-300 rounded-full flex-shrink-0" />
-        )}
-        <span>{node.title}</span>
-      </div>
-
-      {hasChildren && isExpanded && (
-        <div className={`mt-2 ${level === 0 ? 'ml-2' : ''}`}>
-          {node.children!.map((child, index) => (
-            <MindmapNodeItem key={index} node={child} level={level + 1} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+// Helper to convert MindmapNode tree to markdown text for Markmap
+const convertNodeToMarkdown = (node: MindmapNode, depth = 1): string => {
+  let markdown = `${'#'.repeat(depth)} ${node.title}\n`;
+  if (node.children && node.children.length > 0) {
+    node.children.forEach(child => {
+      markdown += convertNodeToMarkdown(child, depth + 1);
+    });
+  }
+  return markdown;
 };
 
 export const MindmapView = ({ meetingId }: MindmapViewProps) => {
@@ -110,6 +74,35 @@ export const MindmapView = ({ meetingId }: MindmapViewProps) => {
       setIsGenerating(false);
     }
   };
+
+  // SVG Refs
+  const svgRef = useRef<SVGSVGElement>(null);
+  const markmapRef = useRef<Markmap | null>(null);
+
+  // Markmap 초기화 및 렌더링
+  useEffect(() => {
+    if (!svgRef.current || !mindmap) return;
+    
+    // Convert current structure to Markdown
+    const markdownStr = convertNodeToMarkdown(mindmap);
+
+    // Transform Markdown to Markmap Root Node
+    const { root } = transformer.transform(markdownStr);
+
+    if (markmapRef.current) {
+      markmapRef.current.setData(root);
+      markmapRef.current.fit();
+    } else {
+      markmapRef.current = Markmap.create(svgRef.current, {
+        color: (node: any) => {
+          // Color logic based on depth
+          const depthColors = ['#4f46e5', '#14b8a6', '#f59e0b', '#f43f5e', '#a855f7'];
+          return depthColors[Math.min(node.depth, depthColors.length - 1)];
+        },
+        paddingX: 16,
+      }, root);
+    }
+  }, [mindmap]);
 
   useEffect(() => {
     loadMindmap();
@@ -197,9 +190,9 @@ export const MindmapView = ({ meetingId }: MindmapViewProps) => {
         </button>
       </div>
 
-      {/* 마인드맵 트리 */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <MindmapNodeItem node={mindmap} />
+      {/* 마인드맵 렌더러 (SVG) */}
+      <div className="bg-white rounded-xl border border-slate-200 p-2 overflow-hidden w-full h-[600px] flex items-center justify-center">
+        <svg ref={svgRef} className="w-full h-full" />
       </div>
     </div>
   );

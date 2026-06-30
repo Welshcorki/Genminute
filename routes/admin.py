@@ -313,8 +313,8 @@ def test_stt_api():
 
         file.save(temp_path)
 
-        # STT 처리
-        segments = stt_manager.transcribe_audio(temp_path)
+        # STT 처리 (통합 인터페이스: .env의 STT_ENGINE에 따라 분기)
+        segments = stt_manager.transcribe(temp_path)
 
         # 임시 파일 삭제
         if os.path.exists(temp_path):
@@ -323,7 +323,7 @@ def test_stt_api():
         if segments:
             # 세그먼트를 텍스트로 변환
             transcript_text = "\n".join([
-                f"Speaker {seg['speaker_label']}: {seg['segment']}"
+                f"Speaker {seg['speaker']}: {seg['text']}"
                 for seg in segments
             ])
 

@@ -31,6 +31,7 @@ export interface MeetingDetail {
   meeting_date: string;
   participants: string[];
   audio_url: string;
+  is_video?: boolean; // 비디오 파일 여부
   transcript: TranscriptSegment[];
   speaker_share: SpeakerShare[];
   can_edit: boolean;
@@ -42,18 +43,51 @@ export interface UserStats {
   total_recording_minutes: number;
 }
 
+export interface PaginationInfo {
+  page: number;
+  per_page: number;
+  total: number;
+  total_pages: number;
+}
+
+export interface PaginatedMeetingsResponse {
+  success: boolean;
+  meetings: Meeting[];
+  pagination: PaginationInfo;
+}
+
+export interface GetAllMeetingsOptions {
+  page?: number;
+  perPage?: number;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  sortBy?: 'date_desc' | 'date_asc' | 'title_asc' | 'title_desc';
+}
+
 export const meetingService = {
-  // 모든 회의 목록 조회
-  getAllMeetings: async (): Promise<Meeting[]> => {
-    const response = await api.get('/notes_json');
-    return response.data.meetings;
+  // 모든 회의 목록 조회 (페이지네이션, 검색, 날짜 필터 지원)
+  getAllMeetings: async (options?: GetAllMeetingsOptions): Promise<PaginatedMeetingsResponse> => {
+    const params = new URLSearchParams();
+    
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.perPage) params.append('per_page', options.perPage.toString());
+    if (options?.search) params.append('search', options.search);
+    if (options?.startDate) params.append('start_date', options.startDate);
+    if (options?.endDate) params.append('end_date', options.endDate);
+    if (options?.sortBy) params.append('sort_by', options.sortBy);
+    
+    const queryString = params.toString();
+    const url = queryString ? `/notes_json?${queryString}` : '/notes_json';
+    
+    const response = await api.get(url);
+    return response.data;
   },
 
-  // 최근 회의 목록 조회 (일단 전체 조회 후 프론트에서 자르거나, 추후 백엔드에 limit 파라미터 추가)
+  // 최근 회의 목록 조회 (상위 5개만)
   getRecentMeetings: async (): Promise<Meeting[]> => {
-    const response = await api.get('/notes_json');
-    // 최신순 정렬은 백엔드 쿼리에서 이미 되어 있음 (ORDER BY date DESC)
-    return response.data.meetings.slice(0, 3); // 상위 3개만 반환
+    const response = await meetingService.getAllMeetings({ page: 1, perPage: 5 });
+    return response.meetings;
   },
 
   // 사용자 통계 조회

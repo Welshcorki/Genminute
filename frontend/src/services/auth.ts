@@ -28,8 +28,10 @@ export const authService = {
     return response.data;
   },
 
-  // 회원가입 (필요 시 구현)
-  signup: async (email, password, name) => {
+  /**
+   * 이메일/비밀번호로 회원가입 (구현 예정)
+   */
+  createAccount: async (email: string, password: string, name: string) => {
     const response = await api.post('/auth/signup', { email, password, name });
     return response.data;
   },

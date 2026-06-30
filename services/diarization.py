@@ -184,8 +184,17 @@ class DiarizationService:
             if os.path.exists(temp_path): os.remove(temp_path)
             return input_path
 
-    def transcribe_and_diarize(self, audio_path: str, language: str = "ko") -> List[Dict[str, Any]]:
-        """통합 처리 함수"""
+    def transcribe_and_diarize(self, audio_path: str, language: str | None = None) -> List[Dict[str, Any]]:
+        """
+        통합 처리 함수
+        
+        Args:
+            audio_path: 오디오 파일 경로
+            language: 언어 코드 (예: "ko", "en"). None이면 Whisper가 자동으로 언어를 감지
+        
+        Returns:
+            List[Dict]: 화자별 전사 결과
+        """
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
@@ -195,13 +204,20 @@ class DiarizationService:
             # 1. STT
             self._load_whisper()
             logger.info(f"🎙️  Step 1: Transcribing ({self.backend})...")
+            if language:
+                logger.info(f"   • Language: {language} (explicit)")
+            else:
+                logger.info(f"   • Language: auto-detect")
             
             whisper_segments = []
             
             if self.backend == "openvino":
                 # OpenVINO Inference
                 # return_timestamps=True 필수
-                prediction = self.whisper_pipeline(processed_audio, return_timestamps=True, generate_kwargs={"language": language})
+                generate_kwargs = {}
+                if language:
+                    generate_kwargs["language"] = language
+                prediction = self.whisper_pipeline(processed_audio, return_timestamps=True, generate_kwargs=generate_kwargs)
                 # 포맷 변환: {'text': '...', 'chunks': [{'text': '...', 'timestamp': (0.0, 5.0)}]}
                 for chunk in prediction['chunks']:
                     start, end = chunk['timestamp']
@@ -212,9 +228,12 @@ class DiarizationService:
                     })
             else:
                 # Faster-Whisper Inference
-                segments_generator, _ = self.whisper_model.transcribe(
+                # language=None이면 자동 감지
+                segments_generator, info = self.whisper_model.transcribe(
                     processed_audio, beam_size=5, word_timestamps=True, language=language
                 )
+                if hasattr(info, 'language'):
+                    logger.info(f"   • Detected language: {info.language}")
                 # 포맷 변환: Faster-Whisper Segment -> Dict
                 for seg in segments_generator:
                     whisper_segments.append({

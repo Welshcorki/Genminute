@@ -1,14 +1,8 @@
 /**
  * NoteDetail 페이지 - 회의록 상세 뷰어
- * 
- * 기능:
- * - 오디오/비디오 플레이어
- * - 전사 스크립트 (화자별 구분)
- * - 요약 탭
- * - 마인드맵 탭
- * - 챗봇 탭 (ChatSidebar)
  */
 import { useState, useEffect, useRef } from 'react';
+import WaveSurfer from 'wavesurfer.js';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -29,15 +23,21 @@ import {
   Edit,
   X,
   Share2,
-  CheckSquare
+  CheckSquare,
+  Gauge,
+  Repeat,
+  RotateCcw
 } from 'lucide-react';
-import { meetingService, type MeetingDetail, type TranscriptSegment } from '../services/meeting';
+import { meetingService, type MeetingDetail } from '../services/meeting';
 import SummaryView from '../components/SummaryView';
 import MindmapView from '../components/MindmapView';
 import MinutesView from '../components/MinutesView';
 import ActionItemsView from '../components/ActionItemsView';
 import ChatSidebar from '../components/ChatSidebar';
 import ShareModal from '../components/ShareModal';
+import SpeakerShareChart from '../components/SpeakerShareChart';
+import { useAudioPlayer } from '../hooks/useAudioPlayer';
+import { useTranscriptSync } from '../hooks/useTranscriptSync';
 
 type TabType = 'script' | 'summary' | 'mindmap' | 'minutes' | 'actionItems' | 'chat';
 
@@ -45,33 +45,29 @@ const NoteDetail = () => {
   const { meetingId } = useParams<{ meetingId: string }>();
   const navigate = useNavigate();
 
-  // 상태
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('script');
   
-  // 편집 상태
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isEditingDate, setIsEditingDate] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDate, setEditDate] = useState('');
-  
-  // 공유 모달 상태
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  // 오디오 플레이어 상태
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
-  const [activeSegmentId, setActiveSegmentId] = useState<number | null>(null);
-  
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const transcriptRef = useRef<HTMLDivElement>(null);
+  const player = useAudioPlayer(meeting?.is_video ?? false);
+  const waveformRef = useRef<HTMLDivElement>(null);
 
-  // 데이터 로드
+  const transcriptSync = useTranscriptSync({
+    transcript: meeting?.transcript,
+    currentTime: player.currentTime,
+    seekTo: player.seekTo,
+    isPlaying: player.isPlaying,
+    togglePlay: player.togglePlay,
+  });
+
   useEffect(() => {
     const loadMeeting = async () => {
       if (!meetingId) return;
@@ -102,102 +98,71 @@ const NoteDetail = () => {
     loadMeeting();
   }, [meetingId]);
 
-  // 오디오 시간 업데이트
+  // WaveSurfer
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    if (!player.showWaveform || !waveformRef.current || !meeting || meeting.is_video) return;
 
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-      
-      // 현재 재생 중인 세그먼트 찾기
-      if (meeting?.transcript) {
-        const activeSegment = meeting.transcript.find(
-          seg => audio.currentTime >= seg.start_time && audio.currentTime < seg.end_time
-        );
-        if (activeSegment) {
-          setActiveSegmentId(activeSegment.id);
+    const wavesurfer = WaveSurfer.create({
+      container: waveformRef.current,
+      waveColor: '#6366f1',
+      progressColor: '#4f46e5',
+      cursorColor: '#312e81',
+      barWidth: 2,
+      barRadius: 3,
+      height: 128,
+      normalize: true,
+      backend: 'WebAudio',
+      mediaControls: false,
+    });
+
+    wavesurfer.load(meeting.audio_url);
+
+    const handlePlay = () => {
+      if (player.audioRef.current && !player.audioRef.current.paused) {
+        wavesurfer.play();
+      }
+    };
+    const handlePause = () => wavesurfer.pause();
+
+    const syncTime = () => {
+      if (player.audioRef.current && player.duration > 0) {
+        const ct = player.audioRef.current.currentTime;
+        if (Math.abs(wavesurfer.getCurrentTime() - ct) > 0.1) {
+          wavesurfer.seekTo(ct / player.duration);
         }
       }
     };
 
-    const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
-    };
+    // Wavesurfer version 7 "seeking" or "interaction"
+    wavesurfer.on('interaction', () => {
+      if (player.audioRef.current) {
+        const seekTime = wavesurfer.getCurrentTime();
+        transcriptSync.handleTimeSeek(seekTime);
+      }
+    });
 
-    const handleEnded = () => {
-      setIsPlaying(false);
-    };
+    const audio = player.audioRef.current;
+    if (audio) {
+      audio.addEventListener('play', handlePlay);
+      audio.addEventListener('pause', handlePause);
+      audio.addEventListener('timeupdate', syncTime);
+    }
 
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('ended', handleEnded);
+    wavesurfer.setPlaybackRate(player.playbackRate);
 
     return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('ended', handleEnded);
-    };
-  }, [meeting?.transcript]);
-
-  // 활성 세그먼트로 스크롤
-  useEffect(() => {
-    if (activeSegmentId && transcriptRef.current) {
-      const activeElement = transcriptRef.current.querySelector(`[data-segment-id="${activeSegmentId}"]`);
-      if (activeElement) {
-        activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (audio) {
+        audio.removeEventListener('play', handlePlay);
+        audio.removeEventListener('pause', handlePause);
+        audio.removeEventListener('timeupdate', syncTime);
       }
-    }
-  }, [activeSegmentId]);
+      wavesurfer.destroy();
+    };
+  }, [player.showWaveform, meeting?.audio_url, meeting?.is_video, player.playbackRate, player.duration]);
 
-  // 재생/일시정지
-  const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      audio.play();
-    }
-    setIsPlaying(!isPlaying);
-  };
-
-  // 음소거
-  const toggleMute = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    audio.muted = !isMuted;
-    setIsMuted(!isMuted);
-  };
-
-  // 시간 포맷팅
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // 세그먼트 클릭 시 해당 시간으로 이동
-  const handleSegmentClick = (segment: TranscriptSegment) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    audio.currentTime = segment.start_time;
-    if (!isPlaying) {
-      audio.play();
-      setIsPlaying(true);
-    }
-  };
-
-  // 회의 삭제
   const handleDelete = async () => {
     if (!meetingId || !meeting?.can_edit) return;
-    
-    if (!window.confirm('정말 이 회의록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-      return;
-    }
+    if (!window.confirm('정말 이 회의록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
 
     try {
       await meetingService.deleteMeeting(meetingId);
@@ -208,7 +173,6 @@ const NoteDetail = () => {
     }
   };
 
-  // 제목 수정 시작
   const handleStartEditTitle = () => {
     if (!meeting) return;
     setEditTitle(meeting.title);
@@ -216,17 +180,14 @@ const NoteDetail = () => {
     setIsMenuOpen(false);
   };
 
-  // 날짜 수정 시작
   const handleStartEditDate = () => {
     if (!meeting) return;
-    // 날짜 형식 변환: "2025-12-18 14:30:00" -> "2025-12-18T14:30"
     const dateStr = meeting.meeting_date.replace(' ', 'T').slice(0, 16);
     setEditDate(dateStr);
     setIsEditingDate(true);
     setIsMenuOpen(false);
   };
 
-  // 제목 수정 저장
   const handleSaveTitle = async () => {
     if (!meetingId || !editTitle.trim()) return;
 
@@ -244,14 +205,12 @@ const NoteDetail = () => {
     }
   };
 
-  // 날짜 수정 저장
   const handleSaveDate = async () => {
     if (!meetingId || !editDate) return;
 
     try {
       const result = await meetingService.updateMeetingDate(meetingId, editDate);
       if (result.success) {
-        // 날짜 형식 변환: "2025-12-18T14:30" -> "2025-12-18 14:30:00"
         const formattedDate = editDate.replace('T', ' ') + ':00';
         setMeeting(prev => prev ? { ...prev, meeting_date: formattedDate } : null);
         setIsEditingDate(false);
@@ -264,7 +223,6 @@ const NoteDetail = () => {
     }
   };
 
-  // 화자별 색상
   const getSpeakerColor = (speaker: string): string => {
     const colors = [
       'bg-indigo-100 text-indigo-700 border-indigo-200',
@@ -274,13 +232,11 @@ const NoteDetail = () => {
       'bg-purple-100 text-purple-700 border-purple-200',
       'bg-cyan-100 text-cyan-700 border-cyan-200',
     ];
-    
     if (!meeting?.participants) return colors[0];
     const index = meeting.participants.indexOf(speaker);
     return colors[index % colors.length];
   };
 
-  // 로딩 중
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
@@ -290,7 +246,6 @@ const NoteDetail = () => {
     );
   }
 
-  // 에러
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
@@ -389,7 +344,7 @@ const NoteDetail = () => {
               </span>
               <span className="flex items-center gap-1">
                 <Clock className="w-4 h-4" />
-                {formatTime(duration)}
+                {player.formatTime(player.duration)}
               </span>
             </div>
           </div>
@@ -450,48 +405,147 @@ const NoteDetail = () => {
         </div>
       </div>
 
-      {/* 오디오 플레이어 */}
+      {/* 미디어 플레이어 */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
-        <audio ref={audioRef} src={meeting.audio_url} preload="metadata" />
+        {meeting.is_video ? (
+          <video 
+            ref={player.videoRef} 
+            src={meeting.audio_url} 
+            preload="metadata"
+            className="w-full rounded-lg mb-4"
+            style={{ maxHeight: '400px' }}
+          />
+        ) : (
+          <audio ref={player.audioRef} src={meeting.audio_url} preload="metadata" />
+        )}
+        
+        {!meeting.is_video && player.showWaveform && (
+          <div ref={waveformRef} className="w-full h-32 mb-4 rounded-lg bg-slate-50" />
+        )}
         
         <div className="flex items-center gap-4">
-          {/* 재생 버튼 */}
           <button
-            onClick={togglePlay}
+            onClick={player.togglePlay}
             className="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors"
           >
-            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+            {player.isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
           </button>
 
-          {/* 진행 바 */}
           <div className="flex-1">
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              value={currentTime}
-              onChange={(e) => {
-                const newTime = parseFloat(e.target.value);
-                if (audioRef.current) {
-                  audioRef.current.currentTime = newTime;
-                }
-                setCurrentTime(newTime);
-              }}
-              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-            />
-            <div className="flex justify-between text-xs text-slate-500 mt-1">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+            <div className="relative">
+              <input
+                type="range"
+                min={0}
+                max={player.duration || 100}
+                value={player.currentTime}
+                onChange={(e) => transcriptSync.handleTimeSeek(parseFloat(e.target.value))}
+                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+              {player.loopStart !== null && player.loopEnd !== null && (
+                <div
+                  className="absolute top-0 h-2 bg-indigo-300 rounded-lg pointer-events-none"
+                  style={{
+                    left: `${(player.loopStart / player.duration) * 100}%`,
+                    width: `${((player.loopEnd - player.loopStart) / player.duration) * 100}%`,
+                  }}
+                />
+              )}
             </div>
+            <div className="flex justify-between text-xs text-slate-500 mt-1">
+              <span>{player.formatTime(player.currentTime)}</span>
+              <span>{player.formatTime(player.duration)}</span>
+            </div>
+            {player.loopStart !== null && player.loopEnd !== null && (
+              <div className="text-xs text-indigo-600 mt-1">
+                반복: {player.formatTime(player.loopStart)} - {player.formatTime(player.loopEnd)}
+              </div>
+            )}
           </div>
 
-          {/* 음소거 버튼 */}
+          <div className="flex items-center gap-2">
+            <Gauge className="w-4 h-4 text-slate-500" />
+            <select
+              value={player.playbackRate}
+              onChange={(e) => player.setPlaybackRate(parseFloat(e.target.value))}
+              className="text-sm border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value={0.5}>0.5x</option>
+              <option value={0.75}>0.75x</option>
+              <option value={1.0}>1.0x</option>
+              <option value={1.25}>1.25x</option>
+              <option value={1.5}>1.5x</option>
+              <option value={1.75}>1.75x</option>
+              <option value={2.0}>2.0x</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+            <button
+              onClick={() => player.setLoopPoint('start')}
+              className={`p-2 rounded-lg transition-colors ${
+                player.loopStart !== null
+                  ? 'bg-indigo-100 text-indigo-600'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
+              title="반복 시작점 설정"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => player.setLoopPoint('end')}
+              className={`p-2 rounded-lg transition-colors ${
+                player.loopEnd !== null
+                  ? 'bg-indigo-100 text-indigo-600'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
+              title="반복 끝점 설정"
+            >
+              <RotateCcw className="w-4 h-4 rotate-180" />
+            </button>
+            {player.loopStart !== null && player.loopEnd !== null && (
+              <>
+                <button
+                  onClick={player.toggleLoop}
+                  className={`p-2 rounded-lg transition-colors ${
+                    player.isLooping
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                  }`}
+                  title="구간 반복 재생"
+                >
+                  <Repeat className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={player.clearLoop}
+                  className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="반복 구간 초기화"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </>
+            )}
+          </div>
+
           <button
-            onClick={toggleMute}
+            onClick={player.toggleMute}
             className="p-2 text-slate-500 hover:text-slate-700 transition-colors"
           >
-            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            {player.isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
+          
+          {!meeting.is_video && (
+            <button
+              onClick={() => player.setShowWaveform(!player.showWaveform)}
+              className={`p-2 rounded-lg transition-colors ${
+                player.showWaveform
+                  ? 'bg-indigo-100 text-indigo-600'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
+              title="파형 시각화"
+            >
+              <Network className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -522,9 +576,8 @@ const NoteDetail = () => {
 
       {/* 탭 컨텐츠 */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-        {/* 스크립트 탭 */}
         {activeTab === 'script' && (
-          <div ref={transcriptRef} className="p-6 max-h-[600px] overflow-y-auto">
+          <div ref={transcriptSync.transcriptRef} className="p-6 max-h-[600px] overflow-y-auto">
             {meeting.transcript.length === 0 ? (
               <div className="text-center py-12 text-slate-500">
                 전사 데이터가 없습니다.
@@ -535,9 +588,9 @@ const NoteDetail = () => {
                   <div
                     key={segment.id}
                     data-segment-id={segment.id}
-                    onClick={() => handleSegmentClick(segment)}
+                    onClick={() => transcriptSync.handleSegmentClick(segment)}
                     className={`p-4 rounded-lg cursor-pointer transition-all ${
-                      activeSegmentId === segment.id
+                      transcriptSync.activeSegmentId === segment.id
                         ? 'bg-indigo-50 ring-2 ring-indigo-500'
                         : 'hover:bg-slate-50'
                     }`}
@@ -547,7 +600,7 @@ const NoteDetail = () => {
                         {segment.speaker_label}
                       </span>
                       <span className="text-xs text-slate-400">
-                        {formatTime(segment.start_time)} - {formatTime(segment.end_time)}
+                        {player.formatTime(segment.start_time)} - {player.formatTime(segment.end_time)}
                       </span>
                     </div>
                     <p className="text-slate-700 leading-relaxed">{segment.text}</p>
@@ -558,35 +611,40 @@ const NoteDetail = () => {
           </div>
         )}
 
-        {/* 요약 탭 */}
         {activeTab === 'summary' && (
-          <div className="p-6">
-            <SummaryView meetingId={meetingId!} />
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <SummaryView meetingId={meetingId!} />
+            </div>
+            <div className="lg:col-span-1">
+              <SpeakerShareChart 
+                speakerShare={meeting.speaker_share?.reduce((acc, curr) => ({
+                  ...acc,
+                  [curr.speaker_label]: curr.percentage
+                }), {}) || {}} 
+              />
+            </div>
           </div>
         )}
 
-        {/* 마인드맵 탭 */}
         {activeTab === 'mindmap' && (
           <div className="p-6">
             <MindmapView meetingId={meetingId!} />
           </div>
         )}
 
-        {/* 회의록 탭 */}
         {activeTab === 'minutes' && (
           <div className="p-6">
             <MinutesView meetingId={meetingId!} />
           </div>
         )}
 
-        {/* Action Items 탭 */}
         {activeTab === 'actionItems' && (
           <div className="p-6">
             <ActionItemsView meetingId={meetingId!} />
           </div>
         )}
 
-        {/* 챗봇 탭 */}
         {activeTab === 'chat' && (
           <div className="p-0">
             <ChatSidebar meetingId={meetingId!} meetingTitle={meeting.title} />
@@ -594,7 +652,6 @@ const NoteDetail = () => {
         )}
       </div>
 
-      {/* 공유 모달 */}
       {meetingId && (
         <ShareModal
           isOpen={isShareModalOpen}
@@ -607,4 +664,3 @@ const NoteDetail = () => {
 };
 
 export default NoteDetail;
-

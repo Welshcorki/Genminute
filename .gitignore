@@ -5,6 +5,7 @@
 **.webm
 uploads/
 vector_db/
+logs/
 **.db
 ngrok.exe
 

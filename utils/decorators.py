@@ -2,6 +2,7 @@
 Flask 라우트 데코레이터
 - @login_required: 로그인 필수
 - @admin_required: Admin 권한 필수
+- @api_error_handler: API 공통 예외 처리
 """
 
 from functools import wraps
@@ -9,6 +10,29 @@ from flask import session, request, jsonify, redirect, url_for, flash
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def api_error_handler(f):
+    """API 라우트 공통 예외 처리 데코레이터
+
+    뷰 함수에서 발생하는 예외를 잡아 일관된 JSON 에러 응답을 반환합니다.
+    ValueError → 400, 그 외 → 500
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except ValueError as e:
+            logger.warning(f"클라이언트 오류 [{request.path}]: {e}")
+            return jsonify({"success": False, "error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"서버 오류 [{request.path}]: {e}", exc_info=True)
+            return jsonify({
+                "success": False,
+                "error": "서버 내부 오류가 발생했습니다."
+            }), 500
+
+    return decorated_function
 
 def login_required(f):
     """

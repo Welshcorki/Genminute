@@ -11,6 +11,11 @@ import NoteDetail from './pages/NoteDetail';
 import SharedNoteList from './pages/SharedNoteList';
 import Recorder from './pages/Recorder';
 
+// 공개 접근 허용 여부 설정
+// true: 비로그인 상태에서도 모든 페이지 접근 가능 (로그인 버튼만 표시)
+// false: 기존 방식 (로그인 페이지가 먼저 나타남)
+const ENABLE_PUBLIC_ACCESS = true;
+
 function App() {
   return (
     <AuthProvider>
@@ -20,18 +25,30 @@ function App() {
             {/* 로그인 페이지 (인증 불필요) */}
         <Route path="/login" element={<Login />} />
         
-            {/* 인증이 필요한 페이지들 */}
-            <Route element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/notes" element={<NoteList />} />
-          <Route path="/notes/:meetingId" element={<NoteDetail />} />
-          <Route path="/shared-notes" element={<SharedNoteList />} />
-          <Route path="/record" element={<Recorder />} />
-        </Route>
+            {/* 조건부 라우팅: 공개 접근 허용 여부에 따라 ProtectedRoute 사용 여부 결정 */}
+            {ENABLE_PUBLIC_ACCESS ? (
+              // 비로그인 접근 허용 모드
+              <Route element={<Layout />}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/notes" element={<NoteList />} />
+                <Route path="/notes/:meetingId" element={<NoteDetail />} />
+                <Route path="/shared-notes" element={<SharedNoteList />} />
+                <Route path="/record" element={<Recorder />} />
+              </Route>
+            ) : (
+              // 기존 방식 (ProtectedRoute 사용)
+              <Route element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/notes" element={<NoteList />} />
+                <Route path="/notes/:meetingId" element={<NoteDetail />} />
+                <Route path="/shared-notes" element={<SharedNoteList />} />
+                <Route path="/record" element={<Recorder />} />
+              </Route>
+            )}
       </Routes>
           
           {/* 전역 업로드 상태 표시 바 */}

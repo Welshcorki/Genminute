@@ -136,21 +136,21 @@ const MinutesView = ({ meetingId }: MinutesViewProps) => {
             // 제목 처리 (# 제목)
             if (line.startsWith('# ')) {
               return (
-                <h1 key={index} className="text-2xl font-bold text-slate-900 mt-6 mb-3">
+                <h1 key={`h1-${index}`} className="text-2xl font-bold text-slate-900 mt-6 mb-3">
                   {line.substring(2)}
                 </h1>
               );
             }
             if (line.startsWith('## ')) {
               return (
-                <h2 key={index} className="text-xl font-bold text-slate-900 mt-5 mb-2 border-b border-indigo-500 pb-1">
+                <h2 key={`h2-${index}`} className="text-xl font-bold text-slate-900 mt-5 mb-2 border-b border-indigo-500 pb-1">
                   {line.substring(3)}
                 </h2>
               );
             }
             if (line.startsWith('### ')) {
               return (
-                <h3 key={index} className="text-lg font-semibold text-slate-900 mt-4 mb-2">
+                <h3 key={`h3-${index}`} className="text-lg font-semibold text-slate-900 mt-4 mb-2">
                   {line.substring(4)}
                 </h3>
               );
@@ -158,18 +158,20 @@ const MinutesView = ({ meetingId }: MinutesViewProps) => {
             // 리스트 처리 (- 항목)
             if (line.startsWith('- ') || line.startsWith('* ')) {
               return (
-                <li key={index} className="ml-4 mb-1">
-                  {line.substring(2)}
-                </li>
+                <ul key={`ul-${index}`} className="list-disc list-inside ml-4 mb-1">
+                  <li>
+                    {line.substring(2)}
+                  </li>
+                </ul>
               );
             }
             // 빈 줄
             if (line.trim() === '') {
-              return <br key={index} />;
+              return <br key={`br-${index}`} />;
             }
             // 일반 텍스트
             return (
-              <p key={index} className="mb-3">
+              <p key={`p-${index}`} className="mb-3">
                 {line}
               </p>
             );

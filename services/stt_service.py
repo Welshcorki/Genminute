@@ -24,6 +24,62 @@ class STTManager:
 
         self._initialized = True
 
+    def transcribe(self, audio_path: str) -> list:
+        """
+        통합 STT 인터페이스
+        .env의 STT_ENGINE 설정에 따라 로컬 모델 또는 Gemini API를 사용합니다.
+
+        Args:
+            audio_path: 오디오 파일 경로
+
+        Returns:
+            list: 통일된 형식의 세그먼트 리스트
+                  [{"speaker", "start_time", "text", "confidence", "end_time"}, ...]
+        """
+        engine = config.STT_ENGINE
+        logger.info(f"🎤 STT 엔진: {engine.upper()}")
+
+        if engine == "gemini":
+            # Gemini API로 STT + 화자분리 (GPU 불필요)
+            segments = self.transcribe_audio(audio_path)
+            if segments is None:
+                raise ValueError("Gemini STT 처리에 실패했습니다.")
+            # end_time 필드 보정 (Gemini 결과에는 없으므로 추정)
+            for i, seg in enumerate(segments):
+                if "end_time" not in seg:
+                    if i + 1 < len(segments):
+                        seg["end_time"] = segments[i + 1]["start_time"]
+                    else:
+                        seg["end_time"] = seg["start_time"] + 5.0
+            return segments
+        else:
+            # 로컬 모델 (faster-whisper + pyannote)
+            from services.diarization import diarization_service
+            raw_segments = diarization_service.transcribe_and_diarize(audio_path, language=None)
+            return self._normalize_local_segments(raw_segments)
+
+    @staticmethod
+    def _normalize_local_segments(raw_segments: list) -> list:
+        """
+        로컬 모델(diarization_service)의 출력을 통일된 포맷으로 변환합니다.
+
+        입력: [{"speaker": "SPEAKER_00", "text": ..., "start": ..., "end": ...}]
+        출력: [{"speaker": "SPEAKER_00", "text": ..., "start_time": ..., "end_time": ..., "confidence": 0.95}]
+        """
+        normalized = []
+        for seg in raw_segments:
+            text = seg["text"].strip()
+            if not text:
+                continue
+            normalized.append({
+                "speaker": seg["speaker"],
+                "start_time": seg["start"],
+                "end_time": seg["end"],
+                "text": text,
+                "confidence": 0.95,
+            })
+        return normalized
+
     @staticmethod
     def _parse_mmss_to_seconds(time_str):
         """
@@ -106,9 +162,9 @@ class STTManager:
             JSON 배열만 출력하고, 추가 설명이나 마크다운 코드 블록은 포함하지 마세요.
             """
 
-            logger.info("🤖 Gemini 2.5 Pro로 음성 인식 중...")
+            logger.info(f"🤖 {config.GEMINI_MODEL}로 음성 인식 중...")
             response = client.models.generate_content(
-                model="gemini-2.5-pro",
+                model=config.GEMINI_MODEL,
                 contents=[prompt, types.Part.from_bytes(data=file_bytes, mime_type=mime_type)],
             )
 
@@ -210,7 +266,7 @@ class STTManager:
             raise ValueError("GOOGLE_API_KEY가 .env 파일에 설정되지 않았습니다.")
 
         client = genai.Client(api_key=api_key)
-        model = "gemini-2.5-pro"
+        model = config.GEMINI_MODEL
 
         import threading
         import datetime
@@ -336,7 +392,7 @@ class STTManager:
             raise ValueError("GOOGLE_API_KEY가 .env 파일에 설정되지 않았습니다.")
 
         client = genai.Client(api_key=api_key)
-        model = "gemini-2.5-pro"
+        model = config.GEMINI_MODEL
 
         logger.info("🤖 Gemini를 통해 회의록 생성 중...")
         try:
@@ -519,7 +575,7 @@ class STTManager:
             raise ValueError("GOOGLE_API_KEY가 .env 파일에 설정되지 않았습니다.")
 
         client = genai.Client(api_key=api_key)
-        model = "gemini-2.5-flash"  # Flash 모델 사용 (빠르고 저렴)
+        model = config.GEMINI_MODEL
 
         try:
             response = client.models.generate_content(

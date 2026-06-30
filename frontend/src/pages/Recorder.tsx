@@ -7,23 +7,25 @@
  * - 실시간 파형 시각화
  * - 녹음 완료 후 업로드
  */
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Mic, Monitor, Play, Pause, Square, Upload, Loader2, AlertCircle, ArrowLeft, RotateCcw } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Mic, Monitor, Play, Pause, Square, Upload, Loader2, AlertCircle, ArrowLeft, RotateCcw, LogIn } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { useRecorder, type RecordingType } from '../hooks/useRecorder';
 import AudioVisualizer from '../components/AudioVisualizer';
-import { uploadFile } from '../services/upload';
+import { useUpload } from '../contexts/UploadContext';
 
 type PageState = 'select' | 'recording' | 'preview' | 'uploading' | 'error';
 
 const Recorder = () => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const { addUpload } = useUpload();
   
   // 페이지 상태
   const [pageState, setPageState] = useState<PageState>('select');
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<string>('');
   
   // 녹음 훅
   const {
@@ -62,6 +64,11 @@ const Recorder = () => {
 
   // 녹음 시작
   const handleStartRecording = async (type: RecordingType) => {
+    if (!isAuthenticated) {
+      setError('녹음을 시작하려면 로그인이 필요합니다.');
+      return;
+    }
+
     setError(null);
     setPageState('recording');
     
@@ -80,12 +87,9 @@ const Recorder = () => {
     setPageState('select');
   };
 
-  // 업로드
+  // 업로드 (전역 Context 사용)
   const handleUpload = async () => {
     if (!recordedBlob || !title.trim()) return;
-
-    setPageState('uploading');
-    setUploadProgress('업로드 준비 중...');
 
     try {
       // Blob을 File로 변환
@@ -93,19 +97,17 @@ const Recorder = () => {
       const fileName = `${title.trim().replace(/[^a-zA-Z0-9가-힣\s]/g, '')}.${extension}`;
       const file = new File([recordedBlob], fileName, { type: recordedBlob.type });
 
-      await uploadFile({
+      // 전역 업로드 Context에 작업 추가 (UploadStatusBar에 자동으로 표시됨)
+      const meetingId = await addUpload(
         file,
-        title: title.trim(),
-        onProgress: (p) => setUploadProgress(p.message),
-        onError: (errMsg) => {
-          setError(errMsg);
-          setPageState('error');
-        },
-        onComplete: (meetingId) => {
-          navigate(`/notes/${meetingId}`);
-        },
-      });
-    } catch {
+        title.trim()
+      );
+
+      // 완료 시 노트 상세 페이지로 이동
+      if (meetingId) {
+        navigate(`/notes/${meetingId}`);
+      }
+    } catch (err) {
       setError('업로드 중 오류가 발생했습니다.');
       setPageState('error');
     }
@@ -138,11 +140,34 @@ const Recorder = () => {
       {/* Step 1: 녹음 타입 선택 */}
       {pageState === 'select' && (
         <div className="space-y-6">
+          {!isAuthenticated && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <div className="flex items-center gap-3 mb-2">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                <p className="text-sm font-medium text-amber-900">로그인이 필요합니다</p>
+              </div>
+              <p className="text-sm text-amber-700 mb-3">
+                녹음을 시작하려면 먼저 로그인해주세요.
+              </p>
+              <Link
+                to="/login"
+                className="inline-flex items-center px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+              >
+                <LogIn className="w-4 h-4 mr-2" />
+                로그인하기
+              </Link>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 마이크 녹음 */}
             <button
               onClick={() => handleStartRecording('mic')}
-              className="group p-6 bg-white border-2 border-slate-200 rounded-2xl hover:border-indigo-500 hover:shadow-lg transition-all text-left"
+              disabled={!isAuthenticated}
+              className={`group p-6 bg-white border-2 rounded-2xl transition-all text-left ${
+                isAuthenticated
+                  ? 'border-slate-200 hover:border-indigo-500 hover:shadow-lg'
+                  : 'border-slate-100 opacity-50 cursor-not-allowed'
+              }`}
             >
               <div className="flex items-center gap-4 mb-4">
                 <div className="p-3 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
@@ -162,7 +187,12 @@ const Recorder = () => {
             {/* 시스템 오디오 녹화 */}
             <button
               onClick={() => handleStartRecording('sys')}
-              className="group p-6 bg-white border-2 border-slate-200 rounded-2xl hover:border-teal-500 hover:shadow-lg transition-all text-left"
+              disabled={!isAuthenticated}
+              className={`group p-6 bg-white border-2 rounded-2xl transition-all text-left ${
+                isAuthenticated
+                  ? 'border-slate-200 hover:border-teal-500 hover:shadow-lg'
+                  : 'border-slate-100 opacity-50 cursor-not-allowed'
+              }`}
             >
               <div className="flex items-center gap-4 mb-4">
                 <div className="p-3 bg-teal-50 rounded-xl group-hover:bg-teal-100 transition-colors">
@@ -275,74 +305,16 @@ const Recorder = () => {
 
       {/* Step 3: 미리보기 및 업로드 */}
       {pageState === 'preview' && recordedBlob && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-900 mb-6">녹음 완료</h2>
-
-          {/* 녹음 정보 */}
-          <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl mb-6">
-            <div className={`p-3 rounded-xl ${
-              recordingType === 'mic' ? 'bg-indigo-100' : 'bg-teal-100'
-            }`}>
-              {recordingType === 'mic' ? (
-                <Mic className="w-6 h-6 text-indigo-600" />
-              ) : (
-                <Monitor className="w-6 h-6 text-teal-600" />
-              )}
-            </div>
-            <div>
-              <p className="font-medium text-slate-900">
-                {recordingType === 'mic' ? '마이크 녹음' : '시스템 오디오 녹화'}
-              </p>
-              <p className="text-sm text-slate-500">
-                {formatTime(duration)} • {(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB
-              </p>
-            </div>
-          </div>
-
-          {/* 오디오 플레이어 */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              미리 듣기
-            </label>
-            <audio
-              controls
-              src={URL.createObjectURL(recordedBlob)}
-              className="w-full"
-            />
-          </div>
-
-          {/* 제목 입력 */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              회의 제목 <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="예: 주간 업무 보고 회의"
-              className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* 버튼 */}
-          <div className="flex gap-4">
-            <button
-              onClick={handleReRecord}
-              className="flex-1 px-4 py-3 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors font-medium"
-            >
-              다시 녹음
-            </button>
-            <button
-              onClick={handleUpload}
-              disabled={!title.trim()}
-              className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
-            >
-              <Upload className="w-5 h-5" />
-              분석 시작
-            </button>
-          </div>
-        </div>
+        <PreviewSection 
+          recordedBlob={recordedBlob}
+          recordingType={recordingType}
+          duration={duration}
+          formatTime={formatTime}
+          title={title}
+          setTitle={setTitle}
+          handleReRecord={handleReRecord}
+          handleUpload={handleUpload}
+        />
       )}
 
       {/* Step 4: 업로드 중 */}
@@ -354,9 +326,9 @@ const Recorder = () => {
             </div>
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">분석 중</h2>
-          <p className="text-slate-500 mb-4">{uploadProgress}</p>
+          <p className="text-slate-500 mb-4">오른쪽 하단의 업로드 상태바에서 진행 상황을 확인할 수 있습니다.</p>
           <p className="text-sm text-slate-400">
-            창을 닫지 마세요. 완료되면 자동으로 이동합니다.
+            다른 페이지로 이동해도 진행 상황을 확인할 수 있습니다.
           </p>
         </div>
       )}
@@ -381,6 +353,115 @@ const Recorder = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// 미리보기 섹션 컴포넌트 (오디오 URL 메모이제이션을 위해 분리)
+interface PreviewSectionProps {
+  recordedBlob: Blob;
+  recordingType: RecordingType | null;
+  duration: number;
+  formatTime: (seconds: number) => string;
+  title: string;
+  setTitle: (title: string) => void;
+  handleReRecord: () => void;
+  handleUpload: () => void;
+}
+
+const PreviewSection = ({
+  recordedBlob,
+  recordingType,
+  duration,
+  formatTime,
+  title,
+  setTitle,
+  handleReRecord,
+  handleUpload,
+}: PreviewSectionProps) => {
+  // 오디오 URL을 메모이제이션하여 리렌더링 시 재생성 방지
+  const audioUrl = useMemo(() => {
+    return URL.createObjectURL(recordedBlob);
+  }, [recordedBlob]);
+
+  // 컴포넌트 언마운트 시 URL 해제
+  useEffect(() => {
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [audioUrl]);
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+      <h2 className="text-xl font-bold text-slate-900 mb-6">녹음 완료</h2>
+
+      {/* 녹음 정보 */}
+      <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl mb-6">
+        <div className={`p-3 rounded-xl ${
+          recordingType === 'mic' ? 'bg-indigo-100' : 'bg-teal-100'
+        }`}>
+          {recordingType === 'mic' ? (
+            <Mic className="w-6 h-6 text-indigo-600" />
+          ) : (
+            <Monitor className="w-6 h-6 text-teal-600" />
+          )}
+        </div>
+        <div>
+          <p className="font-medium text-slate-900">
+            {recordingType === 'mic' ? '마이크 녹음' : '시스템 오디오 녹화'}
+          </p>
+          <p className="text-sm text-slate-500">
+            {formatTime(duration)} • {(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB
+          </p>
+        </div>
+      </div>
+
+      {/* 오디오 플레이어 */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          미리 듣기
+        </label>
+        <audio
+          key={audioUrl} // key를 추가하여 URL이 변경될 때만 재생성
+          controls
+          src={audioUrl}
+          className="w-full"
+        />
+      </div>
+
+      {/* 제목 입력 */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          회의 제목 <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="예: 주간 업무 보고 회의"
+          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
+      </div>
+
+      {/* 버튼 */}
+      <div className="flex gap-4">
+        <button
+          onClick={handleReRecord}
+          className="flex-1 px-4 py-3 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors font-medium"
+        >
+          다시 녹음
+        </button>
+        <button
+          onClick={handleUpload}
+          disabled={!title.trim()}
+          className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
+        >
+          <Upload className="w-5 h-5" />
+          분석 시작
+        </button>
+      </div>
     </div>
   );
 };

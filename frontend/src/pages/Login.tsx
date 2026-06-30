@@ -15,11 +15,16 @@ const Login = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // 이미 로그인되어 있으면 원래 페이지 또는 대시보드로 이동
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
-      const from = location.state?.from?.pathname || '/';
-      navigate(from, { replace: true });
+      const savedRedirect = sessionStorage.getItem('redirect_after_login');
+      if (savedRedirect) {
+        sessionStorage.removeItem('redirect_after_login');
+        navigate(savedRedirect, { replace: true });
+      } else {
+        const from = location.state?.from?.pathname || '/';
+        navigate(from, { replace: true });
+      }
     }
   }, [isAuthenticated, authLoading, navigate, location]);
 
@@ -79,12 +84,9 @@ const Login = () => {
             <img 
               src="/logo.png" 
               alt="GenMinute Logo" 
-              className="h-16 w-16"
+              className="h-24 w-24 sm:h-32 sm:w-32"
             />
           </div>
-          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-teal-400">
-            GenMinute
-          </h1>
           <p className="mt-2 text-slate-400">
             AI 기반 회의록 자동화 및 인사이트 분석
           </p>
@@ -94,13 +96,13 @@ const Login = () => {
       <div className="relative mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white/10 backdrop-blur-lg py-8 px-6 shadow-2xl rounded-2xl border border-white/20">
           {/* 에러 메시지 */}
-          {error && (
+            {error && (
             <div className="mb-6 rounded-lg bg-red-500/20 border border-red-500/30 p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <AlertCircle className="h-5 w-5 text-red-400" aria-hidden="true" />
-                </div>
-                <div className="ml-3">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <AlertCircle className="h-5 w-5 text-red-400" aria-hidden="true" />
+                  </div>
+                  <div className="ml-3">
                   <p className="text-sm text-red-200">{error}</p>
                 </div>
               </div>
@@ -108,16 +110,16 @@ const Login = () => {
           )}
 
           {/* Google 로그인 버튼 */}
-          <button
+              <button
             onClick={handleGoogleLogin}
             disabled={isLoading || !firebaseReady}
             className={`w-full flex justify-center items-center py-3 px-4 rounded-xl shadow-lg text-base font-medium transition-all duration-200 ${
               isLoading || !firebaseReady
                 ? 'bg-white/50 cursor-not-allowed'
                 : 'bg-white hover:bg-gray-100 hover:shadow-xl hover:-translate-y-0.5'
-            }`}
-          >
-            {isLoading ? (
+                }`}
+              >
+                {isLoading ? (
               <>
                 <Loader2 className="animate-spin h-5 w-5 mr-3 text-gray-600" />
                 <span className="text-gray-600">로그인 중...</span>
@@ -150,7 +152,7 @@ const Login = () => {
                 <span className="text-gray-700">Google 계정으로 로그인</span>
               </>
             )}
-          </button>
+              </button>
 
           {/* 안내 문구 */}
           <div className="mt-6 text-center">
@@ -158,7 +160,7 @@ const Login = () => {
               Google 계정으로 간편하게 시작하세요
             </p>
           </div>
-
+          
           {/* 서비스 약관 */}
           <div className="mt-6 text-center">
             <p className="text-xs text-slate-500">
@@ -172,7 +174,7 @@ const Login = () => {
               </a>
               에 동의하게 됩니다.
             </p>
-          </div>
+           </div>
         </div>
 
         {/* 하단 정보 */}

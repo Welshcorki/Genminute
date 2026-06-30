@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mic, Upload, Clock, FileText, MoreVertical, Calendar, ChevronRight, File } from 'lucide-react';
-import { authService } from '../services/auth';
+import { Mic, Upload, Clock, FileText, MoreVertical, Calendar, ChevronRight, File, LogIn } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { meetingService, type Meeting, type UserStats } from '../services/meeting';
 import { UploadModal } from '../components/UploadModal';
 
 const Dashboard = () => {
-  const [user, setUser] = useState<{ name: string } | null>(null);
+  const { user: authUser, isAuthenticated } = useAuth();
   const [recentNotes, setRecentNotes] = useState<Meeting[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -15,14 +15,19 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!isAuthenticated) {
+        // 비로그인 상태에서는 데이터를 가져오지 않음
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const [userData, notesData, statsData] = await Promise.all([
-          authService.getCurrentUser(),
+        const [notesData, statsData] = await Promise.all([
           meetingService.getRecentMeetings(),
           meetingService.getUserStats()
         ]);
-        setUser(userData);
-        setRecentNotes(notesData);
+        // 최대 5개만 표시 (백엔드에서도 제한하지만 프론트엔드에서도 추가 제한)
+        setRecentNotes(notesData.slice(0, 5));
         setStats(statsData);
       } catch (error) {
         console.error("데이터 로딩 실패:", error);
@@ -32,7 +37,7 @@ const Dashboard = () => {
     };
 
     fetchData();
-  }, []);
+  }, [isAuthenticated]);
 
   if (isLoading) {
     return <div className="p-10 text-center text-slate-500">데이터를 불러오는 중...</div>;
@@ -49,73 +54,103 @@ const Dashboard = () => {
         <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
           <div>
             <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
-              안녕하세요, <span className="text-indigo-200">{user?.name || '사용자'}</span>님! 👋
+              {isAuthenticated ? (
+                <>안녕하세요, <span className="text-indigo-200">{authUser?.name || '사용자'}</span>님! 👋</>
+              ) : (
+                <>GenMinute에 오신 것을 환영합니다! 👋</>
+              )}
             </h1>
             <p className="text-slate-400 text-lg leading-relaxed">
               회의, 강의, 인터뷰...<br className="md:hidden" /> 모든 대화를 인사이트로 바꿔보세요.
             </p>
           </div>
           <div className="flex gap-4">
-            <Link
-              to="/record"
-              className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition-all font-bold shadow-lg hover:shadow-indigo-500/20 active:scale-95"
-            >
-              <Mic className="w-5 h-5 mr-2" />
-              새 기록 시작
-            </Link>
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="flex items-center px-6 py-3 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all font-medium backdrop-blur-sm"
-            >
-              <Upload className="w-5 h-5 mr-2" />
-              파일 업로드
-            </button>
+            {isAuthenticated ? (
+              <>
+                <Link
+                  to="/record"
+                  className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition-all font-bold shadow-lg hover:shadow-indigo-500/20 active:scale-95"
+                >
+                  <Mic className="w-5 h-5 mr-2" />
+                  새 기록 시작
+                </Link>
+                <button
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="flex items-center px-6 py-3 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all font-medium backdrop-blur-sm"
+                >
+                  <Upload className="w-5 h-5 mr-2" />
+                  파일 업로드
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/login"
+                className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition-all font-bold shadow-lg hover:shadow-indigo-500/20 active:scale-95"
+              >
+                <LogIn className="w-5 h-5 mr-2" />
+                로그인하여 시작하기
+              </Link>
+            )}
           </div>
         </div>
       </div>
 
       {/* 2. 통계 요약 (Stats) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard
-          icon={<FileText className="w-6 h-6 text-indigo-600" />}
-          label="이번 달 노트"
-          value={stats ? `${stats.monthly_notes}개` : '0개'} 
-          bgColor="bg-indigo-50 border border-indigo-100"
-          clickable={true}
-          onClick={() => navigate('/notes')}
-        />
-        <StatCard
-          icon={<Clock className="w-6 h-6 text-teal-600" />}
-          label="총 녹음 시간"
-          value={stats ? formatRecordingTime(stats.total_recording_hours, stats.total_recording_minutes) : '0시간'} 
-          bgColor="bg-teal-50 border border-teal-100"
-        />
-        <StatCard
-          icon={<File className="w-6 h-6 text-rose-600" />} 
-          label="최근 활동"
-          value={recentNotes.length > 0 ? '기록 있음' : '기록 없음'}
-          subText={recentNotes.length > 0 ? '클릭하여 최근 노트 확인' : '첫 기록을 시작해보세요'}
-          bgColor="bg-rose-50 border border-rose-100"
-          clickable={recentNotes.length > 0}
-          onClick={() => {
-            if (recentNotes.length > 0) {
-              // 가장 최근 노트로 이동
-              navigate(`/notes/${recentNotes[0].meeting_id}`);
-            }
-          }}
-        />
-      </div>
-
-      {/* 3. 최근 내 노트 리스트 */}
-      <div>
-        <div className="flex items-center justify-between mb-6 px-1">
-          <h2 className="text-2xl font-bold text-slate-900">최근 내 노트</h2>
-          <Link to="/notes" className="flex items-center text-sm text-slate-500 hover:text-indigo-600 font-semibold transition-colors">
-            전체 보기 <ChevronRight className="w-4 h-4 ml-1" />
+      {isAuthenticated ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <StatCard
+            icon={<FileText className="w-6 h-6 text-indigo-600" />}
+            label="이번 달 노트"
+            value={stats ? `${stats.monthly_notes}개` : '0개'} 
+            bgColor="bg-indigo-50 border border-indigo-100"
+            clickable={true}
+            onClick={() => navigate('/notes')}
+          />
+          <StatCard
+            icon={<Clock className="w-6 h-6 text-teal-600" />}
+            label="총 녹음 시간"
+            value={stats ? formatRecordingTime(stats.total_recording_hours, stats.total_recording_minutes) : '0시간'} 
+            bgColor="bg-teal-50 border border-teal-100"
+          />
+          <StatCard
+            icon={<File className="w-6 h-6 text-rose-600" />} 
+            label="최근 활동"
+            value={recentNotes.length > 0 ? '기록 있음' : '기록 없음'}
+            subText={recentNotes.length > 0 ? '클릭하여 최근 노트 확인' : '첫 기록을 시작해보세요'}
+            bgColor="bg-rose-50 border border-rose-100"
+            clickable={recentNotes.length > 0}
+            onClick={() => {
+              if (recentNotes.length > 0) {
+                // 가장 최근 노트로 이동
+                navigate(`/notes/${recentNotes[0].meeting_id}`);
+              }
+            }}
+          />
+        </div>
+      ) : (
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center shadow-sm">
+          <p className="text-slate-600 mb-4">로그인하여 통계와 노트를 확인하세요.</p>
+          <Link
+            to="/login"
+            className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium"
+          >
+            <LogIn className="w-5 h-5 mr-2" />
+            로그인하기
           </Link>
         </div>
+      )}
 
-        {recentNotes.length === 0 ? (
+      {/* 3. 최근 내 노트 리스트 */}
+      {isAuthenticated && (
+        <div>
+          <div className="flex items-center justify-between mb-6 px-1">
+            <h2 className="text-2xl font-bold text-slate-900">최근 내 노트</h2>
+            <Link to="/notes" className="flex items-center text-sm text-slate-500 hover:text-indigo-600 font-semibold transition-colors">
+              전체 보기 <ChevronRight className="w-4 h-4 ml-1" />
+            </Link>
+          </div>
+
+          {recentNotes.length === 0 ? (
           <div className="bg-white p-10 rounded-2xl border border-slate-200 text-center shadow-sm">
             <div className="flex justify-center mb-4">
               <div className="p-4 bg-slate-50 rounded-full">
@@ -176,23 +211,26 @@ const Dashboard = () => {
               </div>
             ))}
           </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* 업로드 모달 */}
-      <UploadModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onComplete={(meetingId) => {
-          // 업로드 완료 시 노트 목록 새로고침 및 상세 페이지로 이동
-          if (meetingId) {
-            navigate(`/notes/${meetingId}`);
-          } else {
-            // meetingId가 없으면 노트 목록으로 이동
-            navigate('/notes');
-          }
-        }}
-      />
+      {isAuthenticated && (
+        <UploadModal
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+          onComplete={(meetingId) => {
+            // 업로드 완료 시 노트 목록 새로고침 및 상세 페이지로 이동
+            if (meetingId) {
+              navigate(`/notes/${meetingId}`);
+            } else {
+              // meetingId가 없으면 노트 목록으로 이동
+              navigate('/notes');
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

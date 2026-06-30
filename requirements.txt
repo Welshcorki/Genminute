@@ -1,79 +1,77 @@
 # =========================================
-# GenMinute 통합 의존성 목록 (Golden Set)
-# 통합일: 2025-12-02
+# GenMinute 통합 의존성 목록
+# 최종 업데이트: 2026-02-26
 # =========================================
 
 # -----------------------------------------
-# 1. Core Stability Layer (가장 중요)
+# 1. Core Stability Layer
 # -----------------------------------------
-# Pyannote 3.1.1 호환성을 위해 필수 (변경 금지)
 numpy<2.0
 huggingface_hub<0.20
 
-# PyTorch (환경에 따라 CUDA 버전 선택 필요할 수 있음)
-torch
-torchaudio
+torch>=2.0,<3.0
+torchaudio>=2.0,<3.0
 
 # -----------------------------------------
 # 2. Web Framework & Server
 # -----------------------------------------
-Flask
-Flask-CORS  # React 프론트엔드 CORS 지원
-Werkzeug
-python-dotenv
-gunicorn  # 배포용 (선택)
+Flask>=3.1,<4.0
+Flask-CORS>=4.0,<5.0
+Werkzeug>=3.1,<4.0
+python-dotenv>=1.0,<2.0
+gunicorn>=21.0,<23.0
 
 # -----------------------------------------
 # 3. Database & Auth
 # -----------------------------------------
-firebase-admin
-SQLAlchemy
-bcrypt
-cryptography
-PyJWT
+firebase-admin>=6.0,<7.0
+SQLAlchemy>=2.0,<3.0
+bcrypt>=5.0,<6.0
+cryptography>=41.0,<44.0
+PyJWT>=2.8,<3.0
 
 # -----------------------------------------
 # 4. AI & LLM (GenAI, LangChain)
 # -----------------------------------------
-google-genai
-openai
-tiktoken
-chromadb
-langchain
-langchain-core
-langchain-community
-langchain-google-genai
-langchain-openai
-langchain-text-splitters
-langchain-chroma
+google-genai>=1.0,<2.0
+openai>=2.0,<3.0
+tiktoken>=0.7,<1.0
+chromadb>=1.0,<2.0
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-community>=0.2.0
+langchain-google-genai>=1.0.0
+langchain-openai>=0.1.0
+langchain-text-splitters>=0.2.0
+langchain-chroma>=0.1.0
 
 # -----------------------------------------
 # 5. Local STT & Diarization
 # -----------------------------------------
 faster-whisper==1.2.0
-pyannote.audio
+pyannote.audio>=3.1,<4.0
 
 # -----------------------------------------
 # 6. Calendar & External Tools
 # -----------------------------------------
-google-api-python-client
-google-auth-oauthlib
-google-auth-httplib2
+google-api-python-client>=2.100,<3.0
+google-auth-oauthlib>=1.0,<2.0
+google-auth-httplib2>=0.2,<1.0
 
 # -----------------------------------------
 # 7. Utilities & Data Processing
 # -----------------------------------------
-pandas
-requests
-requests-oauthlib
-urllib3
-certifi
-pytz
-python-dateutil
-pydantic
-pydantic-settings
-PyYAML
+pandas>=2.0,<3.0
+requests>=2.31,<3.0
+requests-oauthlib>=2.0,<3.0
+urllib3>=2.0,<3.0
+certifi>=2024.1.1
+pytz>=2024.1
+python-dateutil>=2.9,<3.0
+pydantic>=2.0,<3.0
+pydantic-settings>=2.0,<3.0
+PyYAML>=6.0,<7.0
 
 # 마인드맵
-pydot
-graphviz
+pydot>=2.0,<3.0
+graphviz>=0.20,<1.0

@@ -1,48 +1,76 @@
-import sqlite3
+"""
+회의 분석 서비스
+화자별 발언 점유율 등 분석 기능을 제공합니다.
+
+Repository 인터페이스에 의존합니다 (DIP).
+"""
+
 from collections import defaultdict
-import os
 import logging
+from typing import Optional, Dict
+
+from database.repositories.interfaces import MeetingRepositoryInterface
 
 logger = logging.getLogger(__name__)
 
-basedir = os.path.abspath(os.path.dirname(__file__))
-DB_PATH = os.path.join(basedir, "..", "database", "minute_ai.db")
 
-def calculate_speaker_share(meeting_id):
-    """특정 회의의 화자별 발언 점유율을 계산합니다 (글자 수 기반)."""
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT speaker_label, segment FROM meeting_dialogues WHERE meeting_id = ?", (meeting_id,))
+class AnalysisService:
+    """회의 데이터 분석 비즈니스 로직"""
+
+    def __init__(self, connection):
+        self._conn = connection
+
+    def calculate_speaker_share(self, meeting_id: str) -> Optional[Dict]:
+        """특정 회의의 화자별 발언 점유율을 계산합니다 (글자 수 기반)."""
+        conn = self._conn.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                "SELECT speaker_label, segment FROM meeting_dialogues WHERE meeting_id = ?",
+                (meeting_id,),
+            )
             rows = cursor.fetchall()
+        finally:
+            conn.close()
 
         if not rows:
             return None
 
-        speaker_text_lengths = defaultdict(int)
+        speaker_text_lengths: dict[str, int] = defaultdict(int)
         total_length = 0
 
         for row in rows:
-            speaker = row['speaker_label']
-            text = row['segment'] if row['segment'] is not None else ""
-            text_length = len(text)
-            speaker_text_lengths[speaker] += text_length
-            total_length += text_length
+            text = row['segment'] or ""
+            length = len(text)
+            speaker_text_lengths[row['speaker_label']] += length
+            total_length += length
 
         if total_length == 0:
             return None
 
-        speaker_percentages = {speaker: (length / total_length) * 100 for speaker, length in speaker_text_lengths.items()}
-        sorted_speakers = sorted(speaker_percentages.items(), key=lambda item: item[1], reverse=True)
+        sorted_speakers = sorted(
+            ((spk, (ln / total_length) * 100) for spk, ln in speaker_text_lengths.items()),
+            key=lambda x: x[1],
+            reverse=True,
+        )
 
-        chart_data = {
-            "labels": [item[0] for item in sorted_speakers],
-            "data": [round(item[1], 2) for item in sorted_speakers]
+        return {
+            "labels": [s[0] for s in sorted_speakers],
+            "data": [round(s[1], 2) for s in sorted_speakers],
         }
 
-        return chart_data
 
+# ── 하위 호환 모듈-레벨 함수 ──
+
+def calculate_speaker_share(meeting_id):
+    """하위 호환: 기존 `from services.analysis_service import calculate_speaker_share` 유지"""
+    try:
+        from config import config
+        from database.sqlite_manager import DatabaseManager
+        db = DatabaseManager(str(config.DATABASE_PATH))
+        service = AnalysisService(db.connection)
+        return service.calculate_speaker_share(meeting_id)
     except Exception as e:
         logger.error(f"Error in calculate_speaker_share: {e}")
         return None

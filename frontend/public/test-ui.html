@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UI 컴포넌트 테스트 - Chart.js & Markmap</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #f1f5f9; padding: 24px; }
+    h1 { text-align: center; color: #1e293b; margin-bottom: 32px; }
+    .test-section { 
+      background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 24px; 
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-width: 900px; margin-left: auto; margin-right: auto;
+    }
+    .test-section h2 { color: #334155; margin-bottom: 16px; font-size: 18px; border-bottom: 2px solid #6366f1; padding-bottom: 8px; }
+    .chart-container { position: relative; width: 100%; height: 300px; }
+    .mindmap-container { width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+    .status { padding: 8px 16px; border-radius: 8px; margin-top: 12px; font-size: 14px; }
+    .status.ok { background: #dcfce7; color: #166534; }
+    .status.fail { background: #fee2e2; color: #991b1b; }
+    .instructions { background: #eff6ff; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; color: #1e40af; font-size: 14px; max-width: 900px; margin-left:auto; margin-right:auto; }
+  </style>
+</head>
+<body>
+  <h1>🧪 UI 컴포넌트 렌더링 테스트</h1>
+  <div class="instructions">
+    <strong>테스트 목적:</strong> Chart.js (Doughnut 차트) 및 Markmap (인터랙티브 마인드맵)이 정상적으로 렌더링되는지 확인합니다.<br/>
+    <strong>마인드맵:</strong> 마우스 휠로 줌, 드래그로 팬 조작을 테스트하세요.
+  </div>
+
+  <!-- Chart.js 테스트 -->
+  <div class="test-section">
+    <h2>📊 1. Chart.js - 화자 비중 Doughnut 차트</h2>
+    <div class="chart-container">
+      <canvas id="speakerChart"></canvas>
+    </div>
+    <div id="chartStatus" class="status"></div>
+  </div>
+
+  <!-- Markmap 테스트 -->
+  <div class="test-section">
+    <h2>🗺️ 2. Markmap - 인터랙티브 마인드맵 (줌/팬 테스트)</h2>
+    <div class="mindmap-container">
+      <svg id="mindmapSvg" style="width:100%;height:100%;"></svg>
+    </div>
+    <div id="markmapStatus" class="status"></div>
+  </div>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <script>
+    // ===== 1. Chart.js 테스트 =====
+    try {
+      const ctx = document.getElementById('speakerChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['화자 1', '화자 2', '화자 3', '화자 4'],
+          datasets: [{
+            data: [35, 28, 22, 15],
+            backgroundColor: ['#6366f1', '#14b8a6', '#f43f5e', '#f59e0b'],
+            borderWidth: 1,
+            borderColor: '#ffffff',
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: {
+                font: { family: "'Inter', sans-serif", size: 12 },
+                color: '#475569',
+                usePointStyle: true,
+                padding: 20
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => ` ${context.label}: ${context.parsed}%`
+              }
+            }
+          },
+          cutout: '70%',
+          layout: { padding: 10 }
+        }
+      });
+      document.getElementById('chartStatus').className = 'status ok';
+      document.getElementById('chartStatus').textContent = '✅ Chart.js Doughnut 차트 렌더링 성공!';
+    } catch (e) {
+      document.getElementById('chartStatus').className = 'status fail';
+      document.getElementById('chartStatus').textContent = '❌ Chart.js 렌더링 실패: ' + e.message;
+    }
+  </script>
+
+  <!-- Markmap: d3 + markmap-view + markmap-lib via ESM -->
+  <script type="module">
+    import { Transformer } from 'https://cdn.jsdelivr.net/npm/markmap-lib@0.17/+esm';
+    import { Markmap } from 'https://cdn.jsdelivr.net/npm/markmap-view@0.17/+esm';
+
+    try {
+      const transformer = new Transformer();
+      
+      const markdown = `# 회의 마인드맵 (테스트)
+## 1. 프로젝트 현황
+### 1.1 프론트엔드
+- React 전환 완료
+- Vite 빌드 시스템 적용
+- Chart.js 통합
+### 1.2 백엔드
+- Flask API 서버
+- WSGI 배포 설정
+- Firebase 인증
+## 2. 핵심 기능
+### 2.1 STT (Speech-to-Text)
+- Faster Whisper 로컬 모델
+- Google Gemini API
+### 2.2 요약 생성
+- LangChain 기반
+- 화자별 발언 분석
+### 2.3 마인드맵
+- Markmap 라이브러리
+- SVG 인터랙티브 렌더링
+## 3. 배포 전략
+### 3.1 로컬 환경
+- Conda 가상환경
+- Waitress WSGI
+### 3.2 프로덕션
+- Gunicorn 워커 설정
+- Docker 컨테이너화 예정`;
+
+      const { root } = transformer.transform(markdown);
+
+      const svgEl = document.getElementById('mindmapSvg');
+      const mm = Markmap.create(svgEl, {
+        color: (node) => {
+          const depthColors = ['#4f46e5', '#14b8a6', '#f59e0b', '#f43f5e', '#a855f7'];
+          return depthColors[Math.min(node.depth, depthColors.length - 1)];
+        },
+        paddingX: 16,
+      }, root);
+
+      document.getElementById('markmapStatus').className = 'status ok';
+      document.getElementById('markmapStatus').textContent = '✅ Markmap 렌더링 성공! 마우스 휠로 줌, 드래그로 팬 조작을 테스트해보세요.';
+    } catch (e) {
+      document.getElementById('markmapStatus').className = 'status fail';
+      document.getElementById('markmapStatus').textContent = '❌ Markmap 렌더링 실패: ' + e.message;
+    }
+  </script>
+</body>
+</html>

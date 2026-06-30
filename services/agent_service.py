@@ -46,7 +46,7 @@ class AgentService:
             raise ValueError("GOOGLE_API_KEY가 설정되지 않았습니다.")
         
         # LLM과 Tool 정의
-        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, api_key=config.GOOGLE_API_KEY)
+        self.llm = ChatGoogleGenerativeAI(model=config.GEMINI_MODEL, temperature=0, api_key=config.GOOGLE_API_KEY)
         self.tools = [add_calendar_event]
         self.llm_with_tools = self.llm.bind_tools(self.tools, tool_choice="any")
         

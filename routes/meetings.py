@@ -1,14 +1,10 @@
 """
-회의 관련 라우트
-회의 목록 조회, 상세 보기, 삭제, 공유 등
+회의 관련 핵심 라우트 (Thin Controller)
+회의 CRUD, 통계, 마인드맵 등 핵심 기능
+(공유, 업로드, Action Items는 별도 모듈로 분리됨)
 """
-from flask import Blueprint, render_template, request, jsonify, session, Response, stream_with_context
-from werkzeug.utils import secure_filename
-import os
-import uuid
-import json
+from flask import Blueprint, render_template, request, jsonify, session
 import logging
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -16,145 +12,51 @@ from config import config
 from database.sqlite_manager import DatabaseManager
 from database.vector_manager import vdb_manager
 from services.stt_service import STTManager
-from utils.decorators import login_required
+from utils.decorators import login_required, api_error_handler
 from services.user_service import (
     can_access_meeting,
     can_edit_meeting,
     get_user_meetings,
     get_shared_meetings,
-    share_meeting,
-    get_shared_users,
-    remove_share
 )
 from services.analysis_service import calculate_speaker_share
+from services.meeting_service import MeetingService
 from utils.validation import validate_title, parse_meeting_date
-from services.upload_service import upload_service
-from services.agent_service import AgentService
 
-# Blueprint 생성
 meetings_bp = Blueprint('meetings', __name__)
 
-# 데이터베이스 매니저 초기화
 db = DatabaseManager(str(config.DATABASE_PATH))
 stt_manager = STTManager()
 
-# Agent Service 초기화 (지연 초기화로 에러 방지)
-agent_service = None
-def get_agent_service():
-    global agent_service
-    if agent_service is None:
-        try:
-            agent_service = AgentService()
-        except Exception as e:
-            logger.warning(f"⚠️ Agent Service 초기화 실패 (선택적 기능): {e}")
-    return agent_service
+meeting_service = MeetingService(
+    meeting_repo=db.meeting_repo,
+    minutes_repo=db.minutes_repo,
+    mindmap_repo=db.mindmap_repo,
+)
 
 
 @meetings_bp.route("/")
 @login_required
 def index():
-    """
-    메인 페이지 (파일 업로드 페이지)
-
-    Returns:
-        HTML: 업로드 페이지
-    """
+    """메인 페이지 (파일 업로드 페이지)"""
     return render_template("index.html")
 
 
 @meetings_bp.route("/api/stats", methods=["GET"])
 @login_required
+@api_error_handler
 def get_user_stats():
-    """
-    사용자 통계 조회 (이번 달 노트 수, 총 녹음 시간 등)
-
-    Returns:
-        JSON: 통계 데이터
-    """
+    """사용자 통계 조회"""
     user_id = session['user_id']
-    conn = db._get_connection()
-    cursor = conn.cursor()
-
-    try:
-        # 이번 달 시작일과 종료일 계산
-        now = datetime.now()
-        current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        
-        # Admin 여부 확인
-        from services.user_service import is_admin
-        
-        # 이번 달 노트 수 (고유 meeting_id 개수)
-        if is_admin(user_id):
-            cursor.execute("""
-                SELECT COUNT(DISTINCT meeting_id) as count
-                FROM meeting_dialogues
-                WHERE meeting_date >= ?
-            """, (current_month_start.strftime("%Y-%m-%d %H:%M:%S"),))
-        else:
-            cursor.execute("""
-                SELECT COUNT(DISTINCT meeting_id) as count
-                FROM meeting_dialogues
-                WHERE owner_id = ? AND meeting_date >= ?
-            """, (user_id, current_month_start.strftime("%Y-%m-%d %H:%M:%S")))
-        
-        monthly_count = cursor.fetchone()['count'] or 0
-
-        # 총 녹음 시간 계산 (각 meeting_id별 최대 start_time의 합)
-        if is_admin(user_id):
-            cursor.execute("""
-                SELECT SUM(max_time) as total_seconds
-                FROM (
-                    SELECT meeting_id, MAX(start_time) as max_time
-                    FROM meeting_dialogues
-                    GROUP BY meeting_id
-                )
-            """)
-        else:
-            cursor.execute("""
-                SELECT SUM(max_time) as total_seconds
-                FROM (
-                    SELECT meeting_id, MAX(start_time) as max_time
-                    FROM meeting_dialogues
-                    WHERE owner_id = ?
-                    GROUP BY meeting_id
-                )
-            """, (user_id,))
-        
-        result = cursor.fetchone()
-        total_seconds = result['total_seconds'] if result and result['total_seconds'] else 0
-        
-        # 초를 시간으로 변환
-        total_hours = int(total_seconds // 3600)
-        total_minutes = int((total_seconds % 3600) // 60)
-        
-        return jsonify({
-            "success": True,
-            "stats": {
-                "monthly_notes": monthly_count,
-                "total_recording_hours": total_hours,
-                "total_recording_minutes": total_minutes,
-                "total_recording_seconds": int(total_seconds)
-            }
-        })
-    except Exception as e:
-        logger.error(f"통계 조회 오류: {e}")
-        return jsonify({
-            "success": False,
-            "error": "통계 조회 중 오류가 발생했습니다."
-        }), 500
-    finally:
-        conn.close()
+    from services.user_service import is_admin
+    stats = meeting_service.get_user_stats(user_id, is_admin(user_id))
+    return jsonify({"success": True, "stats": stats})
 
 
 @meetings_bp.route("/notes")
 @login_required
 def notes():
-    """
-    내 노트 목록 조회
-
-    Returns:
-        HTML: 노트 목록 페이지
-    """
+    """내 노트 목록 조회"""
     user_id = session['user_id']
     meetings = get_user_meetings(user_id)
     return render_template("notes.html", meetings=meetings)
@@ -163,12 +65,7 @@ def notes():
 @meetings_bp.route("/shared-notes")
 @login_required
 def shared_notes():
-    """
-    공유받은 노트 목록 조회
-
-    Returns:
-        HTML: 공유 노트 목록 페이지
-    """
+    """공유받은 노트 목록 조회"""
     user_id = session['user_id']
     shared_meetings = get_shared_meetings(user_id)
     return render_template("shared-notes.html", meetings=shared_meetings)
@@ -177,777 +74,139 @@ def shared_notes():
 @meetings_bp.route("/view/<string:meeting_id>")
 @login_required
 def view_meeting(meeting_id):
-    """
-    회의록 뷰어 페이지
-
-    Args:
-        meeting_id: 회의 ID
-
-    Returns:
-        HTML: 회의록 뷰어 페이지 또는 접근 거부 메시지
-    """
+    """회의록 뷰어 페이지"""
     user_id = session['user_id']
-
-    # 권한 체크
     if not can_access_meeting(user_id, meeting_id):
-        return "⛔ 접근 권한이 없습니다.", 403
-
+        return "접근 권한이 없습니다.", 403
     return render_template("viewer.html", meeting_id=meeting_id)
 
 
 @meetings_bp.route("/api/meeting/<string:meeting_id>")
 @login_required
+@api_error_handler
 def get_meeting_data(meeting_id):
-    """
-    회의 데이터 조회 (전사, 요약, 화자 정보 등)
-
-    Args:
-        meeting_id: 회의 ID
-
-    Returns:
-        JSON: 회의 전체 데이터
-    """
+    """회의 데이터 조회 (전사, 요약, 화자 정보 등)"""
     user_id = session['user_id']
 
-    # 권한 체크
     if not can_access_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "접근 권한이 없습니다."
-        }), 403
+        return jsonify({"success": False, "error": "접근 권한이 없습니다."}), 403
 
-    # 회의 데이터 조회
-    rows = db.get_meeting_by_id(meeting_id)
+    detail = meeting_service.get_meeting_detail(meeting_id)
+    if not detail:
+        return jsonify({"success": False, "error": "회의를 찾을 수 없습니다."}), 404
 
-    if not rows:
-        return jsonify({
-            "success": False,
-            "error": "회의를 찾을 수 없습니다."
-        }), 404
-
-    # 전사 데이터 변환 (dict로 변환)
-    transcript = [dict(row) for row in rows]
-
-    # 회의 정보 추출
-    audio_file = rows[0]['audio_file']
-    title = rows[0]['title']
-    meeting_date = rows[0]['meeting_date']
-
-    # 참석자 목록 추출 (중복 제거)
-    participants = list(set([t['speaker_label'] for t in transcript if t.get('speaker_label')]))
-    participants.sort()
-
-    # 화자별 점유율 계산
-    speaker_share_data = calculate_speaker_share(meeting_id)
-
-    # 수정 권한 확인 (owner 또는 admin만 수정 가능)
-    can_edit = can_edit_meeting(user_id, meeting_id)
-
-    return jsonify({
-        "success": True,
-        "meeting_id": meeting_id,
-        "title": title,
-        "meeting_date": meeting_date,
-        "participants": participants,
-        "audio_url": f"/uploads/{audio_file}",
-        "transcript": transcript,
-        "speaker_share": speaker_share_data,
-        "can_edit": can_edit
-    })
+    detail["success"] = True
+    detail["speaker_share"] = calculate_speaker_share(meeting_id)
+    detail["can_edit"] = can_edit_meeting(user_id, meeting_id)
+    return jsonify(detail)
 
 
 @meetings_bp.route("/api/delete_meeting/<string:meeting_id>", methods=["POST"])
 @login_required
+@api_error_handler
 def delete_meeting(meeting_id):
-    """
-    회의 삭제 (SQLite, Vector DB, 오디오 파일 모두 삭제)
-
-    Args:
-        meeting_id: 회의 ID
-
-    Returns:
-        JSON: 삭제 성공 여부
-    """
+    """회의 삭제 (SQLite, Vector DB, 오디오 파일 모두 삭제)"""
     user_id = session['user_id']
 
-    # 권한 체크 (소유자만 삭제 가능)
     if not can_edit_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "삭제 권한이 없습니다. (소유자만 삭제 가능)"
-        }), 403
+        return jsonify({"success": False, "error": "삭제 권한이 없습니다."}), 403
 
-    try:
-        # Vector DB, SQLite DB, 오디오 파일 모두 삭제
-        # db_type="all"로 모든 데이터 삭제
-        result = vdb_manager.delete_from_collection(db_type="all", meeting_id=meeting_id)
-        return jsonify(result)
-
-    except ValueError as e:
-        # meeting_id를 찾을 수 없는 경우
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 404
-    except Exception as e:
-        logger.error(f"❌ 회의 삭제 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"삭제 중 오류가 발생했습니다: {str(e)}"
-        }), 500
+    result = vdb_manager.delete_from_collection(db_type="all", meeting_id=meeting_id)
+    return jsonify(result)
 
 
 @meetings_bp.route("/api/update_title/<string:meeting_id>", methods=["POST"])
 @login_required
+@api_error_handler
 def update_meeting_title(meeting_id):
-    """
-    회의 제목 수정
-
-    Args:
-        meeting_id: 회의 ID
-
-    Request JSON:
-        {
-            "new_title": "새로운 제목"
-        }
-
-    Returns:
-        JSON: 수정 성공 여부
-    """
+    """회의 제목 수정"""
     user_id = session['user_id']
 
-    # 권한 체크
     if not can_edit_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "수정 권한이 없습니다."
-        }), 403
+        return jsonify({"success": False, "error": "수정 권한이 없습니다."}), 403
 
-    try:
-        data = request.get_json()
-        new_title = data.get('title', '').strip()
+    data = request.get_json()
+    new_title = data.get('title', '').strip()
 
-        # 제목 검증
-        is_valid, error_message = validate_title(new_title)
-        if not is_valid:
-            return jsonify({
-                "success": False,
-                "error": error_message
-            }), 400
+    is_valid, error_message = validate_title(new_title)
+    if not is_valid:
+        return jsonify({"success": False, "error": error_message}), 400
 
-        # DB 업데이트
-        result = db.update_meeting_title(meeting_id, new_title)
-
-        return jsonify(result)
-
-    except Exception as e:
-        logger.error(f"❌ 제목 수정 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"제목 수정 중 오류가 발생했습니다: {str(e)}"
-        }), 500
+    result = meeting_service.update_title(meeting_id, new_title)
+    return jsonify(result)
 
 
 @meetings_bp.route("/api/update_date/<string:meeting_id>", methods=["POST"])
 @login_required
+@api_error_handler
 def update_meeting_date(meeting_id):
-    """
-    회의 날짜 수정
-
-    Args:
-        meeting_id: 회의 ID
-
-    Request JSON:
-        {
-            "new_date": "2025-11-13T14:30"
-        }
-
-    Returns:
-        JSON: 수정 성공 여부
-    """
+    """회의 날짜 수정"""
     user_id = session['user_id']
 
-    # 권한 체크
     if not can_edit_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "수정 권한이 없습니다."
-        }), 403
+        return jsonify({"success": False, "error": "수정 권한이 없습니다."}), 403
 
-    try:
-        data = request.get_json()
-        new_date = data.get('date', '').strip()
+    data = request.get_json()
+    new_date = data.get('date', '').strip()
+    if not new_date:
+        return jsonify({"success": False, "error": "날짜를 입력해주세요."}), 400
 
-        if not new_date:
-            return jsonify({
-                "success": False,
-                "error": "날짜를 입력해주세요."
-            }), 400
+    formatted_date = parse_meeting_date(new_date)
+    result = meeting_service.update_date(meeting_id, formatted_date)
+    return jsonify(result)
 
-        # 날짜 파싱 및 포맷팅
-        formatted_date = parse_meeting_date(new_date)
-
-        # DB 업데이트
-        result = db.update_meeting_date(meeting_id, formatted_date)
-
-        return jsonify(result)
-
-    except Exception as e:
-        logger.error(f"❌ 날짜 수정 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"날짜 수정 중 오류가 발생했습니다: {str(e)}"
-        }), 500
-
-
-# ==================== 공유 기능 ====================
-
-@meetings_bp.route("/api/share/<string:meeting_id>", methods=["POST"])
-@login_required
-def share_meeting_route(meeting_id):
-    """
-    노트 공유 (이메일 기반)
-
-    Args:
-        meeting_id: 회의 ID
-
-    Request JSON:
-        {
-            "email": "user@example.com"
-        }
-
-    Returns:
-        JSON: 공유 성공 여부
-    """
-    user_id = session['user_id']
-
-    # 권한 체크 (소유자만 공유 가능)
-    if not can_edit_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "공유 권한이 없습니다. (소유자만 공유 가능)"
-        }), 403
-
-    try:
-        data = request.get_json()
-        target_email = data.get('email')
-
-        if not target_email:
-            return jsonify({
-                "success": False,
-                "error": "이메일을 입력해주세요."
-            }), 400
-
-        # 공유 처리
-        result = share_meeting(meeting_id, user_id, target_email)
-
-        return jsonify(result)
-
-    except Exception as e:
-        logger.error(f"❌ 공유 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"공유 중 오류가 발생했습니다: {str(e)}"
-        }), 500
-
-
-@meetings_bp.route("/api/shared_users/<string:meeting_id>")
-@login_required
-def get_shared_users_route(meeting_id):
-    """
-    공유받은 사용자 목록 조회
-
-    Args:
-        meeting_id: 회의 ID
-
-    Returns:
-        JSON: 공유 사용자 목록
-    """
-    user_id = session['user_id']
-
-    # 권한 체크
-    if not can_access_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "접근 권한이 없습니다."
-        }), 403
-
-    try:
-        shared_users = get_shared_users(meeting_id)
-
-        return jsonify({
-            "success": True,
-            "shared_users": shared_users
-        })
-
-    except Exception as e:
-        logger.error(f"❌ 공유 사용자 조회 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"조회 중 오류가 발생했습니다: {str(e)}"
-        }), 500
-
-
-@meetings_bp.route("/api/unshare/<string:meeting_id>/<int:target_user_id>", methods=["POST"])
-@login_required
-def unshare_meeting_route(meeting_id, target_user_id):
-    """
-    공유 해제
-
-    Args:
-        meeting_id: 회의 ID
-        target_user_id: 공유 해제할 사용자 ID
-
-    Returns:
-        JSON: 해제 성공 여부
-    """
-    user_id = session['user_id']
-
-    # 권한 체크 (소유자만 공유 해제 가능)
-    if not can_edit_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "공유 해제 권한이 없습니다. (소유자만 가능)"
-        }), 403
-
-    try:
-        result = remove_share(meeting_id, user_id, target_user_id)
-
-        return jsonify(result)
-
-    except Exception as e:
-        logger.error(f"❌ 공유 해제 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"공유 해제 중 오류가 발생했습니다: {str(e)}"
-        }), 500
-
-
-@meetings_bp.route("/api/shared-notes", methods=["GET"])
-@login_required
-def get_shared_notes_api():
-    """
-    공유받은 노트 목록 조회 (JSON API)
-
-    Returns:
-        JSON: 공유받은 노트 목록
-    """
-    user_id = session['user_id']
-
-    try:
-        shared_meetings = get_shared_meetings(user_id)
-        
-        # 프론트엔드에서 사용하는 형식으로 변환
-        meetings = []
-        for meeting in shared_meetings:
-            meetings.append({
-                'meeting_id': meeting.get('meeting_id'),
-                'title': meeting.get('title'),
-                'date': meeting.get('date') or meeting.get('meeting_date'),
-                'audio_file': meeting.get('audio_file'),
-                'summary': meeting.get('summary')
-            })
-
-        return jsonify({
-            'success': True,
-            'meetings': meetings
-        })
-
-    except Exception as e:
-        logger.error(f"❌ 공유받은 노트 조회 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"조회 중 오류가 발생했습니다: {str(e)}"
-        }), 500
-
-
-# ==================== 파일 업로드 ====================
-
-@meetings_bp.route("/upload", methods=["POST"])
-@login_required
-def upload_and_process():
-    """
-    파일 업로드 및 STT 처리 (SSE 스트리밍)
-    
-    Form Data:
-        title: 회의 제목
-        audio_file: 오디오/비디오 파일
-    
-    Returns:
-        SSE Stream: 실시간 진행 상황
-    """
-    owner_id = session['user_id']
-    
-    # 제목 검증
-    title = request.form.get('title', '').strip()
-    is_valid, error_message = validate_title(title)
-    if not is_valid:
-        return render_template("index.html", error=error_message)
-    
-    # 파일 검증
-    if 'audio_file' not in request.files:
-        return render_template("index.html", error="오디오 파일이 없습니다.")
-    
-    file = request.files['audio_file']
-    is_valid, error_message = upload_service.validate_file(file.filename)
-    if not is_valid:
-        return render_template("index.html", error=error_message)
-    
-    # 파일 저장 (generator 시작 전에 완료)
-    meeting_id = uuid.uuid4().hex
-    file_path, original_filename, is_video = upload_service.save_uploaded_file(file, meeting_id)
-    meeting_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    # SSE Generator 함수
-    def generate():
-        nonlocal file_path, is_video # 바깥 범위 변수 수정 허용
-        temp_audio_path = None
-        
-        try:
-            logger.info("🚀 SSE 생성 시작")
-            # Step 1: 파일 업로드 완료
-            yield f"data: {json.dumps({'step': 'upload', 'message': '파일 업로드가 완료되었습니다...', 'icon': '📤'})}\n\n"
-            
-            # [추가] WebM -> 호환 포맷 자동 변환 (MP4/M4A)
-            # [OPTIMIZATION] 업로드 속도 향상을 위해 MP4 변환 로직 주석 처리 (On-Demand로 변경 예정)
-            # if file_path.lower().endswith('.webm'):
-            #     logger.info("🔄 WebM 파일 감지 -> 호환 포맷 변환 시작")
-            #     yield f"data: {json.dumps({'step': 'convert', 'message': '호환성을 위해 파일 형식을 변환 중...', 'icon': '🔄'})}\n\n"
-            #     
-            #     success, new_path, error_msg = upload_service.convert_webm_to_compatible_format(file_path)
-            #     if not success:
-            #         logger.error(f"❌ 포맷 변환 실패: {error_msg}")
-            #         yield f"data: {json.dumps({'step': 'error', 'message': f'파일 형식 변환 실패: {error_msg}'})}\n\n"
-            #         return
-            #     
-            #     # 경로 업데이트
-            #     file_path = new_path
-            #     # MP4인 경우에만 비디오로 취급
-            #     is_video = file_path.lower().endswith('.mp4')
-            #     logger.info(f"✅ 변환 완료: {file_path} (is_video={is_video})")
-
-            # Step 2: 비디오 변환 (MP4에서 오디오 추출)
-            audio_path_for_stt = file_path
-            if is_video:
-                logger.info("🎬 비디오 오디오 추출 단계 진입")
-                yield f"data: {json.dumps({'step': 'convert', 'message': '비디오를 오디오로 변환 중...', 'icon': '🎬'})}\n\n"
-                
-                success, temp_audio_path, error_msg = upload_service.convert_video_to_audio(file_path)
-                if not success:
-                    logger.error(f"❌ 비디오 오디오 추출 실패: {error_msg}")
-                    yield f"data: {json.dumps({'step': 'error', 'message': f'오디오 추출 실패: {error_msg}'})}\n\n"
-                    return
-                
-                audio_path_for_stt = temp_audio_path
-                logger.info(f"✅ 오디오 추출 완료: {temp_audio_path}")
-            
-            # Step 3: STT 처리
-            logger.info(f"🎤 STT 처리 단계 진입: {audio_path_for_stt}")
-            yield f"data: {json.dumps({'step': 'stt', 'message': '회의 음성을 텍스트로 변환하고 있습니다...', 'icon': '🎤'})}\n\n"
-            
-            # [수정] DB에는 최종 변환된 파일명(file_path)을 저장해야 함
-            # STT 분석은 오디오 추출된 파일(audio_path_for_stt)로 수행
-            result = upload_service.process_audio_file(
-                audio_path=audio_path_for_stt,
-                meeting_id=meeting_id,
-                title=title,
-                meeting_date=meeting_date,
-                owner_id=owner_id,
-                original_filename=os.path.basename(file_path)
-            )
-            logger.info(f"✅ STT 처리 결과: {result}")
-
-            if not result['success']:
-                yield f"data: {json.dumps({'step': 'error', 'message': 'STT 처리 실패'})}\n\n"
-                return
-
-            # 실제로 저장된 meeting_id 가져오기 (중요!)
-            actual_meeting_id = result['meeting_id']
-
-            # 임시 WAV 파일 삭제
-            if temp_audio_path:
-                upload_service.cleanup_temp_files(temp_audio_path)
-
-            # Step 4: 문단 요약 생성
-            yield f"data: {json.dumps({'step': 'summary', 'message': '회의 내용을 분석하고 요약하고 있습니다...', 'icon': '📝'})}\n\n"
-
-            try:
-                result = upload_service.generate_summary(actual_meeting_id)
-                logger.info(f"✅ 문단 요약 생성 완료 (meeting_id: {actual_meeting_id})")
-
-                # Step 5: 마인드맵 생성 (요약 성공 시에만)
-                if result.get('success'):
-                    yield f"data: {json.dumps({'step': 'mindmap', 'message': '마인드맵을 생성하고 있습니다...', 'icon': '🗺️'})}\n\n"
-                    logger.info(f"✅ 마인드맵도 자동 생성되었습니다 (meeting_id: {actual_meeting_id})")
-
-            except Exception as e:
-                logger.warning(f"⚠️  문단 요약 생성 실패: {e}", exc_info=True)
-                # 요약 실패해도 계속 진행
-
-            # Step 6: 완료
-            redirect_url = f"/view/{actual_meeting_id}"
-            yield f"data: {json.dumps({'step': 'complete', 'message': '노트 생성이 완료되었습니다!', 'redirect': redirect_url, 'icon': '✅'})}\n\n"
-        
-        except Exception as e:
-            error_msg = f"처리 중 오류가 발생했습니다: {str(e)}"
-            logger.error(f"❌ 업로드 처리 실패: {e}", exc_info=True)
-            yield f"data: {json.dumps({'step': 'error', 'message': error_msg})}\n\n"
-
-            # 임시 파일 정리
-            if temp_audio_path:
-                upload_service.cleanup_temp_files(temp_audio_path)
-            
-            yield f"data: {json.dumps({'step': 'error', 'message': f'서버 처리 중 오류가 발생했습니다: {str(e)}'})}\n\n"
-    
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
-
-
-# ==================== 노트 목록 JSON ====================
 
 @meetings_bp.route("/notes_json")
 @login_required
+@api_error_handler
 def notes_json():
-    """
-    노트 목록을 JSON으로 반환 (업로드 상태 확인용)
-    
-    Returns:
-        JSON: 노트 목록
-    """
-    try:
-        user_id = session['user_id']
-        meetings = get_user_meetings(user_id)
-        return jsonify({"success": True, "meetings": meetings})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    """노트 목록을 JSON으로 반환 (페이지네이션, 검색, 날짜 필터 지원)"""
+    user_id = session['user_id']
 
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 10))
+    search_term = request.args.get('search', '').strip() or None
+    start_date = request.args.get('start_date', '').strip() or None
+    end_date = request.args.get('end_date', '').strip() or None
+    sort_by = request.args.get('sort_by', 'date_desc')
 
-# ==================== 마인드맵 ====================
+    from services.user_service import get_user_meetings_count
+    total_count = get_user_meetings_count(
+        user_id, search_term=search_term,
+        start_date=start_date, end_date=end_date,
+    )
+    meetings = get_user_meetings(
+        user_id, page=page, per_page=per_page,
+        search_term=search_term, start_date=start_date,
+        end_date=end_date, sort_by=sort_by,
+    )
+
+    total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 0
+
+    return jsonify({
+        "success": True,
+        "meetings": meetings,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": total_count,
+            "total_pages": total_pages,
+        },
+    })
+
 
 @meetings_bp.route("/api/mindmap/<string:meeting_id>", methods=["GET"])
 @login_required
+@api_error_handler
 def get_mindmap(meeting_id):
-    """
-    마인드맵 조회
-    
-    Args:
-        meeting_id: 회의 ID
-    
-    Returns:
-        JSON: 마인드맵 데이터
-    """
+    """마인드맵 조회"""
     user_id = session['user_id']
-    
-    # 권한 체크
+
     if not can_access_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "접근 권한이 없습니다."
-        }), 403
-    
-    try:
-        # SQLite DB에서 마인드맵 조회 (string 반환)
-        mindmap_content = db.get_mindmap_by_meeting_id(meeting_id)
+        return jsonify({"success": False, "error": "접근 권한이 없습니다."}), 403
 
-        if mindmap_content:
-            return jsonify({
-                "success": True,
-                "has_mindmap": True,
-                "mindmap_content": mindmap_content
-            })
-        else:
-            return jsonify({
-                "success": True,
-                "has_mindmap": False,
-                "message": "마인드맵이 아직 생성되지 않았습니다."
-            })
+    mindmap_content = meeting_service.get_mindmap(meeting_id)
 
-    except Exception as e:
-        logger.error(f"❌ 마인드맵 조회 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"마인드맵 조회 중 오류 발생: {str(e)}"
-        }), 500
-
-
-# ==================== Action Items ====================
-
-@meetings_bp.route("/api/extract_action_items/<string:meeting_id>", methods=["POST"])
-@login_required
-def extract_action_items(meeting_id):
-    """
-    Action Item 추출 (수동 트리거)
-    
-    Args:
-        meeting_id: 회의 ID
-    
-    Returns:
-        JSON: 추출 결과
-    """
-    user_id = session['user_id']
-    
-    # 권한 체크
-    if not can_access_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "접근 권한이 없습니다."
-        }), 403
-    
-    try:
-        # Agent Service 초기화 확인
-        agent = get_agent_service()
-        if agent is None:
-            return jsonify({
-                "success": False,
-                "error": "Action Item 추출 기능을 사용할 수 없습니다. (Agent Service 초기화 실패)"
-            }), 503
-        
-        # 회의록 텍스트 조회
-        minutes = db.get_minutes_by_meeting_id(meeting_id)
-        if not minutes or not minutes.get('minutes_content'):
-            # 회의록이 없으면 전사본으로 대체 시도
-            segments = db.get_segments_by_meeting_id(meeting_id)
-            if not segments:
-                return jsonify({
-                    "success": False,
-                    "error": "회의록 또는 전사본을 찾을 수 없습니다."
-                }), 404
-            
-            # 전사본을 텍스트로 변환
-            meeting_text = "\n".join([f"{s.get('speaker_label', 'Unknown')}: {s.get('segment', '')}" 
-                                     for s in segments])
-        else:
-            meeting_text = minutes['minutes_content']
-        
-        # Agent Service로 Action Item 추출
-        logger.info(f"🤖 Action Item 추출 시작: meeting_id={meeting_id}")
-        final_state = agent.process(meeting_text, user_id)
-        
-        # 추출된 Action Items를 DB에 저장
-        processed_items = final_state.get('processed_items', [])
-        if processed_items:
-            # CalendarEvent 형식을 DB 형식으로 변환
-            db_items = []
-            for item in processed_items:
-                db_items.append({
-                    'content': item.get('summary', ''),
-                    'due_date': item.get('start_time'),
-                    'calendar_event_id': item.get('event_id')  # 캘린더 이벤트 ID가 있다면
-                })
-            
-            db.save_action_items(meeting_id, db_items)
-            logger.info(f"✅ Action Items 저장 완료: {len(db_items)}개")
-        
-        return jsonify({
-            "success": True,
-            "message": f"{len(processed_items)}개의 Action Item이 추출되었습니다.",
-            "count": len(processed_items)
-        })
-        
-    except Exception as e:
-        logger.error(f"❌ Action Item 추출 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"Action Item 추출 중 오류 발생: {str(e)}"
-        }), 500
-
-
-@meetings_bp.route("/api/action_items/<string:meeting_id>", methods=["GET"])
-@login_required
-def get_action_items(meeting_id):
-    """
-    Action Item 목록 조회
-    
-    Args:
-        meeting_id: 회의 ID
-    
-    Returns:
-        JSON: Action Item 목록
-    """
-    user_id = session['user_id']
-    
-    # 권한 체크
-    if not can_access_meeting(user_id, meeting_id):
-        return jsonify({
-            "success": False,
-            "error": "접근 권한이 없습니다."
-        }), 403
-    
-    try:
-        items = db.get_action_items_by_meeting_id(meeting_id)
-        return jsonify({
-            "success": True,
-            "action_items": items
-        })
-    except Exception as e:
-        logger.error(f"❌ Action Items 조회 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"Action Items 조회 중 오류 발생: {str(e)}"
-        }), 500
-
-
-@meetings_bp.route("/api/action_items/<int:item_id>/status", methods=["POST"])
-@login_required
-def update_action_item_status(item_id):
-    """
-    Action Item 상태 업데이트
-    
-    Args:
-        item_id: Action Item ID
-    
-    Request Body:
-        {
-            "status": "pending" | "done"
-        }
-    
-    Returns:
-        JSON: 업데이트 결과
-    """
-    user_id = session['user_id']
-    
-    try:
-        data = request.get_json()
-        status = data.get('status')
-        
-        if status not in ['pending', 'done']:
-            return jsonify({
-                "success": False,
-                "error": "잘못된 상태 값입니다. 'pending' 또는 'done'만 허용됩니다."
-            }), 400
-        
-        # Action Item의 meeting_id 조회하여 권한 체크
-        meeting_id = db.get_action_item_meeting_id(item_id)
-        
-        if not meeting_id:
-            return jsonify({
-                "success": False,
-                "error": "Action Item을 찾을 수 없습니다."
-            }), 404
-        
-        # 권한 체크
-        if not can_access_meeting(user_id, meeting_id):
-            return jsonify({
-                "success": False,
-                "error": "접근 권한이 없습니다."
-            }), 403
-        
-        # 상태 업데이트
-        success = db.update_action_item_status(item_id, status)
-        
-        if success:
-            return jsonify({
-                "success": True,
-                "message": "상태가 업데이트되었습니다."
-            })
-        else:
-            return jsonify({
-                "success": False,
-                "error": "상태 업데이트에 실패했습니다."
-            }), 500
-            
-    except Exception as e:
-        logger.error(f"❌ Action Item 상태 업데이트 실패: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"상태 업데이트 중 오류 발생: {str(e)}"
-        }), 500
+    if mindmap_content:
+        return jsonify({"success": True, "has_mindmap": True, "mindmap_content": mindmap_content})
+    return jsonify({"success": True, "has_mindmap": False, "message": "마인드맵이 아직 생성되지 않았습니다."})
