@@ -6,27 +6,12 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 import logging
 
 from config import config
-from services.firebase_service import verify_id_token
+from services.supabase_service import verify_access_token
 from services.user_service import get_or_create_user
 from utils.decorators import login_required
 
 auth_bp = Blueprint('auth', __name__)
 logger = logging.getLogger(__name__)
-
-
-@auth_bp.route("/api/firebase-config", methods=["GET"])
-def get_firebase_config():
-    """
-    Firebase 클라이언트 설정 반환 (프론트엔드용)
-    
-    Returns:
-        JSON: Firebase 설정 객체
-    """
-    firebase_config = config.get_firebase_config()
-    return jsonify({
-        'success': True,
-        'config': firebase_config
-    })
 
 
 @auth_bp.route("/login")
@@ -41,20 +26,17 @@ def login_page():
     if 'user_id' in session:
         return redirect(url_for('meetings.index'))
 
-    # Firebase Config를 템플릿에 전달
-    firebase_config = config.get_firebase_config()
-
-    return render_template("login.html", firebase_config=firebase_config)
+    return render_template("login.html")
 
 
 @auth_bp.route("/api/login", methods=["POST"])
 def login():
     """
-    Firebase ID 토큰을 받아 세션 생성
+    Supabase Access Token을 받아 세션 생성
 
     Request JSON:
         {
-            "idToken": "Firebase ID 토큰"
+            "accessToken": "Supabase Access Token"
         }
 
     Returns:
@@ -62,16 +44,16 @@ def login():
     """
     try:
         data = request.get_json()
-        id_token = data.get('idToken')
+        access_token = data.get('accessToken')
 
-        if not id_token:
+        if not access_token:
             return jsonify({
                 'success': False,
-                'error': 'ID 토큰이 필요합니다.'
+                'error': 'Access Token이 필요합니다.'
             }), 400
 
-        # Firebase ID 토큰 검증
-        user_info = verify_id_token(id_token)
+        # Supabase Access Token 검증
+        user_info = verify_access_token(access_token)
 
         if not user_info:
             return jsonify({

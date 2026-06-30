@@ -4,7 +4,7 @@
 """
 from flask import Blueprint, render_template, jsonify, request
 
-from database.sqlite_manager import DatabaseManager
+from database import get_db_manager
 from database.vector_manager import vdb_manager
 from services.stt_service import STTManager
 from utils.decorators import login_required, admin_required
@@ -14,7 +14,7 @@ from config import config
 admin_bp = Blueprint('admin', __name__)
 
 # 매니저 초기화
-db = DatabaseManager(str(config.DATABASE_PATH))
+db = get_db_manager()
 stt_manager = STTManager()
 
 

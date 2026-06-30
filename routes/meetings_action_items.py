@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request, session
 import logging
 
 from config import config
-from database.sqlite_manager import DatabaseManager
+from database import get_db_manager
 from utils.decorators import login_required, api_error_handler
 from services.user_service import can_access_meeting
 from services.upload_service import convert_agent_items_to_db_format
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 meetings_action_items_bp = Blueprint('meetings_action_items', __name__)
 
-db = DatabaseManager(str(config.DATABASE_PATH))
+db = get_db_manager()
 
 _agent_service = None
 

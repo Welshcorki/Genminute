@@ -1,0 +1,17 @@
+/**
+ * Supabase 클라이언트 설정
+ * 환경변수에서 URL과 Anon Key를 읽어 초기화합니다.
+ */
+import { createClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Supabase 환경변수가 설정되지 않았습니다. VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY를 확인하세요.')
+}
+
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+
+export default supabase

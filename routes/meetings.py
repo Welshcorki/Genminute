@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from config import config
-from database.sqlite_manager import DatabaseManager
+from database import get_db_manager
 from database.vector_manager import vdb_manager
 from services.stt_service import STTManager
 from utils.decorators import login_required, api_error_handler
@@ -25,7 +25,7 @@ from utils.validation import validate_title, parse_meeting_date
 
 meetings_bp = Blueprint('meetings', __name__)
 
-db = DatabaseManager(str(config.DATABASE_PATH))
+db = get_db_manager()
 stt_manager = STTManager()
 
 meeting_service = MeetingService(

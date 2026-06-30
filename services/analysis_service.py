@@ -67,9 +67,15 @@ def calculate_speaker_share(meeting_id):
     """하위 호환: 기존 `from services.analysis_service import calculate_speaker_share` 유지"""
     try:
         from config import config
-        from database.sqlite_manager import DatabaseManager
-        db = DatabaseManager(str(config.DATABASE_PATH))
-        service = AnalysisService(db.connection)
+        from database import get_db_manager
+        db = get_db_manager()
+        
+        if config.DB_TYPE == 'supabase':
+            from services.supabase_analysis_service import SupabaseAnalysisService
+            service = SupabaseAnalysisService(db.connection)
+        else:
+            service = AnalysisService(db.connection)
+            
         return service.calculate_speaker_share(meeting_id)
     except Exception as e:
         logger.error(f"Error in calculate_speaker_share: {e}")

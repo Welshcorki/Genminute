@@ -24,6 +24,8 @@ function App() {
       <Routes>
             {/* 로그인 페이지 (인증 불필요) */}
         <Route path="/login" element={<Login />} />
+        {/* Supabase OAuth 리다이렉트 수신 경로 */}
+        <Route path="/auth/callback" element={<Login />} />
         
             {/* 조건부 라우팅: 공개 접근 허용 여부에 따라 ProtectedRoute 사용 여부 결정 */}
             {ENABLE_PUBLIC_ACCESS ? (

@@ -1,5 +1,6 @@
 {
+    "python.defaultInterpreterPath": "C:/Users/butte/miniconda3/envs/genminute_stt/python.exe",
+    "python.condaPath": "C:/Users/butte/miniconda3/Scripts/conda.exe",
     "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda",
-    "python-envs.pythonProjects": []
+    "python-envs.defaultPackageManager": "ms-python.python:conda"
 }

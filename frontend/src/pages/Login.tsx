@@ -1,6 +1,6 @@
 /**
  * 로그인 페이지
- * Firebase Google 인증을 통한 로그인
+ * Supabase Google 인증을 통한 로그인
  */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signInWithGoogle, isAuthenticated, isLoading: authLoading, firebaseReady } = useAuth();
+  const { signInWithGoogle, isAuthenticated, isLoading: authLoading } = useAuth();
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -34,20 +34,13 @@ const Login = () => {
 
     try {
       await signInWithGoogle();
-      // 로그인 성공 시 AuthContext가 상태를 업데이트하고 useEffect에서 리다이렉트 처리
+      // Supabase OAuth는 리다이렉트 방식이므로 여기서 직접 처리할 필요 없음
     } catch (err: any) {
       console.error('Google 로그인 실패:', err);
       
-      // Firebase 에러 메시지 처리
       let errorMessage = '로그인에 실패했습니다. 다시 시도해주세요.';
       
-      if (err.code === 'auth/popup-closed-by-user') {
-        errorMessage = '로그인 창이 닫혔습니다. 다시 시도해주세요.';
-      } else if (err.code === 'auth/popup-blocked') {
-        errorMessage = '팝업이 차단되었습니다. 팝업 차단을 해제해주세요.';
-      } else if (err.code === 'auth/network-request-failed') {
-        errorMessage = '네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.';
-      } else if (err.message) {
+      if (err.message) {
         errorMessage = err.message;
       }
       
@@ -112,9 +105,9 @@ const Login = () => {
           {/* Google 로그인 버튼 */}
               <button
             onClick={handleGoogleLogin}
-            disabled={isLoading || !firebaseReady}
+            disabled={isLoading}
             className={`w-full flex justify-center items-center py-3 px-4 rounded-xl shadow-lg text-base font-medium transition-all duration-200 ${
-              isLoading || !firebaseReady
+              isLoading
                 ? 'bg-white/50 cursor-not-allowed'
                 : 'bg-white hover:bg-gray-100 hover:shadow-xl hover:-translate-y-0.5'
                 }`}
@@ -123,11 +116,6 @@ const Login = () => {
               <>
                 <Loader2 className="animate-spin h-5 w-5 mr-3 text-gray-600" />
                 <span className="text-gray-600">로그인 중...</span>
-              </>
-            ) : !firebaseReady ? (
-              <>
-                <Loader2 className="animate-spin h-5 w-5 mr-3 text-gray-600" />
-                <span className="text-gray-600">초기화 중...</span>
               </>
             ) : (
               <>

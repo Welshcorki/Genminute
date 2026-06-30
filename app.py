@@ -21,8 +21,7 @@ from datetime import datetime
 
 from config import config
 from services.diarization import diarization_service
-from services.firebase_service import initialize_firebase
-from database.sqlite_manager import DatabaseManager
+from database import get_db_manager
 from database.vector_manager import vdb_manager
 from routes import register_blueprints
 from services.user_service import is_admin
@@ -38,18 +37,9 @@ CORS(app, resources={r"/*": {"origins": config.ALLOWED_ORIGINS}}, supports_crede
 app.config.from_object(config)
 
 
-# ==================== Firebase 초기화 ====================
-try:
-    initialize_firebase()
-    logger.info("Firebase 초기화 성공")
-except Exception as e:
-    logger.error(f"Firebase 초기화 실패: {e}")
-    logger.warning("로그인 기능이 작동하지 않을 수 있습니다.")
-
-
 # ==================== DI 조립: Repository → Service ====================
 # 1) DatabaseManager (Facade + Singleton) – Repository 접근자 제공
-db = DatabaseManager(str(config.DATABASE_PATH))
+db = get_db_manager()
 
 # 2) VectorDBManager에 DatabaseManager 주입
 vdb_manager.db_manager = db
@@ -68,8 +58,14 @@ meeting_service = MeetingService(
     minutes_repo=db.minutes_repo,
     mindmap_repo=db.mindmap_repo,
 )
-analysis_service = AnalysisService(connection=db.connection)
-user_service = UserService(connection=db.connection)
+if config.DB_TYPE == 'supabase':
+    from services.supabase_analysis_service import SupabaseAnalysisService
+    from services.supabase_user_service import SupabaseUserService
+    analysis_service = SupabaseAnalysisService(connection=db.connection)
+    user_service = SupabaseUserService(connection=db.connection)
+else:
+    analysis_service = AnalysisService(connection=db.connection)
+    user_service = UserService(connection=db.connection)
 
 logger.info("DI 조립 완료: Repository → Service")
 

@@ -9,14 +9,14 @@ import google.oauth2.credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from database.sqlite_manager import DatabaseManager
+from database import get_db_manager
 from config import config
 
 # 로거 설정
 logger = logging.getLogger(__name__)
 
 # 데이터베이스 매니저 초기화
-db = DatabaseManager(str(config.DATABASE_PATH))
+db = get_db_manager()
 
 # --- Pydantic 모델 정의 ---
 class CalendarEvent(BaseModel):

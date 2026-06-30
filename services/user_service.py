@@ -392,10 +392,18 @@ class UserService:
 # 기존 코드(`from services.user_service import can_access_meeting` 등)가
 # 깨지지 않도록 유지합니다. 새 코드에서는 UserService 클래스를 사용하세요.
 
-def _get_service() -> UserService:
-    from database.sqlite_manager import DatabaseManager
-    db = DatabaseManager(str(config.DATABASE_PATH))
-    return UserService(db.connection)
+def _get_service():
+    from config import config
+    from database import get_db_manager
+    
+    db = get_db_manager()
+    
+    if config.DB_TYPE == 'supabase':
+        from services.supabase_user_service import SupabaseUserService
+        return SupabaseUserService(db.connection)
+    else:
+        from services.user_service import UserService
+        return UserService(db.connection)
 
 
 def get_or_create_user(google_id, email, name=None, profile_picture=None):

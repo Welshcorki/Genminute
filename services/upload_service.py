@@ -12,7 +12,7 @@ from datetime import datetime
 
 from config import config
 from services.stt_service import STTManager
-from database.sqlite_manager import DatabaseManager
+from database import get_db_manager
 from database.vector_manager import vdb_manager
 from utils.validation import validate_title, parse_meeting_date
 from services.agent_service import AgentService
@@ -55,7 +55,7 @@ class UploadService:
 
     def __init__(self):
         self.stt_manager = STTManager()
-        self.db = DatabaseManager(str(config.DATABASE_PATH))
+        self.db = get_db_manager()
         self.vdb_manager = vdb_manager
         self.agent_service = AgentService()
 

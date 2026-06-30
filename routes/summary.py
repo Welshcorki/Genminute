@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request, session, render_template
 import logging
 
 from config import config
-from database.sqlite_manager import DatabaseManager
+from database import get_db_manager
 from database.vector_manager import vdb_manager
 from services.stt_service import STTManager
 from services.user_service import can_access_meeting
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 summary_bp = Blueprint('summary', __name__)
 
 # 매니저 초기화
-db = DatabaseManager(str(config.DATABASE_PATH))
+db = get_db_manager()
 stt_manager = STTManager()
 
 
