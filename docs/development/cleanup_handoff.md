@@ -58,3 +58,26 @@
 - 파괴적 작업은 근거 확인 → 보고 → 승인 후 실행.
 - AI 파이프라인(stt_service, diarization, agent_service, google_auth/calendar) 수정 금지.
 - 커밋은 logical 단위 + conventional commits.
+
+## Phase 1 검증 결과 (2026-07-01) — 복구 코드 "유지" 확정
+
+비파괴 검증. 복구 코드는 유지하기에 충분히 견고함을 확인.
+
+| 검증 | 결과 |
+|---|---|
+| frontend 빌드 (`tsc -b && vite build`) | 통과, dist 생성. Firebase 제거+supabase.ts+신규 컴포넌트 타입에러 0 |
+| DI 조립 (sqlite 분기 격리 실행) | 통과. repo 주입 서비스 인스턴스화 성공 |
+| 테스트 (`unittest discover tests`) | repo 21개 통과. torch 실패 1건은 로컬 env 문제 |
+| 삭제 모듈 잔여 import 스캔 | firebase/삭제모듈 잔여 0건 |
+| DB 실상태 | supabase 레이어 **실구현**(Facade+실쿼리+스키마). 기본값 supabase |
+
+**중요 정정:** `dev_log_phase3.md`의 "DB 전환 SQLite→Supabase = 미완([ ])"은 **stale**.
+실제로는 supabase 백엔드가 구현 완료·기본값. (라이브 실구동은 크레덴셜 필요라 env-gated.)
+
+**품질 관찰(문서에 정직히 반영):**
+- Repository 패턴 **부분 적용**: meeting/minutes/mindmap/action_item은 repo 경유,
+  analysis·user 서비스는 raw `connection` 직접 사용(repo 우회) + `Supabase*Service` 병렬 클래스.
+  → "전면 Repository 패턴"으로 서술하면 과장.
+- 환경 경계: 로컬 pyenv에 `flask_cors`/`torch`/supabase 크레덴셜 없음 → 전체 Flask 부팅은
+  `genminute_stt` conda env에서만 검증 가능.
+- 사소: `frontend/public/test-ui.html`이 dist에 함께 배포됨(정리 후보).
