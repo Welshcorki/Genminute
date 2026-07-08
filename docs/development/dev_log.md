@@ -1,5 +1,43 @@
 # GenMinute 개발 일지 (Dev Log)
 
+## 2026년 7월 9일 - 프론트엔드 디자인 시스템 도입 (토큰·타이포·파형 시그니처)
+
+### 1. 목표
+- 프론트엔드에 시각적 아이덴티티 부재 문제 해결: 색 표류(indigo/amber 혼용), 폰트 미지정(맑은 고딕 렌더링), 템플릿형 히어로(블러 원+이모지), 가짜 콘텐츠, 접근성 결함
+
+### 2. 주요 변경 사항 (커밋 4건, `cleanup` 브랜치)
+
+#### 1단계 — 디자인 토큰 + 타이포그래피
+- **Pretendard Variable** 셀프호스팅 적용 (`npm i pretendard`, `index.css` import)
+- `tailwind.config.js`에 `brand`(=indigo) 토큰 정의, 전 파일 `indigo-*` → `brand-*` 치환
+- NoteList/SharedNoteList의 amber 액센트 → brand 통일 (Recorder의 경고 시맨틱 amber는 유지)
+- **화자 색 단일 소스** `src/config/speakers.ts` 신규 — NoteDetail 화자 칩과 SpeakerShareChart가 공유 (기존 두 곳 중복 정의 + 음수 인덱스 버그 해소)
+- 타임코드/진행률 `font-mono`, `rounded-3xl` → `rounded-2xl` 정규화, 전역 `:focus-visible` 링
+
+#### 2단계 — 가짜 콘텐츠·접근성 정리
+- 하드코딩 태그(#자동생성 등)·'Audio' 뱃지·동작 없는 ⋮ 버튼·미사용 `App.css` 제거
+- 노트 카드 `div onClick` → `<Link>` (키보드 접근), 클릭형 StatCard → `<button>`
+- 아이콘 전용 버튼 aria-label 추가, Dashboard '최근 활동' 카드가 실제 최근 노트 제목·날짜 표시
+
+#### 3단계 — 파형 시그니처 히어로
+- `WaveformMotif.tsx` 신규 (고정 시드 SVG 오디오 파형, aria-hidden) — "소리"라는 제품 재료를 시각 언어로
+- Dashboard 히어로·Login: 블러 원/이모지/글래스모피즘 제거, 다크 배경 + 파형 모티프 공유, Login 카드는 솔리드 화이트로
+
+#### 4단계 — 화자 색 확장 + 스켈레톤
+- NoteDetail 헤더에 화자 색 참석자 칩, 차트 색을 participants 순서 기준으로 배정해 스크립트 칩과 일치
+- `Skeleton.tsx` 신규, 텍스트 로더("불러오는 중...")를 콘텐츠 형태 스켈레톤으로 교체 (4개 페이지 + 무한스크롤)
+
+### 3. 검증
+- 각 단계 `npm run build`(tsc 포함) 통과, lint 에러 수 기존 35건 유지(신규 0)
+- headless Edge 스크린샷으로 Dashboard/Login 렌더링 확인 (파형·Pretendard·솔리드 카드 정상)
+
+### 4. 알려진 이슈 / 후속 과제
+- lint 기존 에러 35건(any 타입 등)은 이번 범위 외
+- 태그/노트 타입 실제 DB 연동, Login 약관 링크(`#`) 연결은 미착수
+- NoteDetail은 인증 필요로 스크린샷 검증 못함 (빌드/타입 검증만)
+
+---
+
 ## 2026년 4월 8일 - STT 엔진 일원화 + Gemini 모델 통일 + Supabase 전환 계획
 
 ### 1. 목표
