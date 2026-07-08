@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mic, Upload, Clock, FileText, MoreVertical, Calendar, ChevronRight, File, LogIn } from 'lucide-react';
+import { Mic, Upload, Clock, FileText, Calendar, ChevronRight, File, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { meetingService, type Meeting, type UserStats } from '../services/meeting';
 import { UploadModal } from '../components/UploadModal';
@@ -107,17 +107,17 @@ const Dashboard = () => {
             onClick={() => navigate('/notes')}
           />
           <StatCard
-            icon={<Clock className="w-6 h-6 text-teal-600" />}
+            icon={<Clock className="w-6 h-6 text-brand-600" />}
             label="총 녹음 시간"
-            value={stats ? formatRecordingTime(stats.total_recording_hours, stats.total_recording_minutes) : '0시간'} 
-            bgColor="bg-teal-50 border border-teal-100"
+            value={stats ? formatRecordingTime(stats.total_recording_hours, stats.total_recording_minutes) : '0시간'}
+            bgColor="bg-brand-50 border border-brand-100"
           />
           <StatCard
-            icon={<File className="w-6 h-6 text-rose-600" />} 
-            label="최근 활동"
-            value={recentNotes.length > 0 ? '기록 있음' : '기록 없음'}
-            subText={recentNotes.length > 0 ? '클릭하여 최근 노트 확인' : '첫 기록을 시작해보세요'}
-            bgColor="bg-rose-50 border border-rose-100"
+            icon={<File className="w-6 h-6 text-brand-600" />}
+            label="최근 노트"
+            value={recentNotes.length > 0 ? recentNotes[0].title : '기록 없음'}
+            subText={recentNotes.length > 0 ? recentNotes[0].date : '첫 기록을 시작해보세요'}
+            bgColor="bg-brand-50 border border-brand-100"
             clickable={recentNotes.length > 0}
             onClick={() => {
               if (recentNotes.length > 0) {
@@ -170,45 +170,26 @@ const Dashboard = () => {
         ) : (
           <div className="grid gap-5">
             {recentNotes.map((note) => (
-              <div
+              <Link
                 key={note.meeting_id}
-                onClick={() => navigate(`/notes/${note.meeting_id}`)}
-                className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
+                to={`/notes/${note.meeting_id}`}
+                className="block bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
               >
-                <div className="flex justify-between items-start">
-                  <div className="space-y-3 w-full">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-xl font-bold text-slate-900 group-hover:text-brand-600 transition-colors truncate">
-                        {note.title}
-                      </h3>
-                      <span className="text-xs font-medium text-slate-500 flex items-center bg-slate-100 px-2.5 py-1 rounded-full shrink-0">
-                        <Calendar className="w-3 h-3 mr-1.5" />
-                        {note.date}
-                      </span>
-                    </div>
-                    <p className="text-slate-600 text-sm line-clamp-2 leading-relaxed max-w-2xl">
-                      {note.summary || '요약 내용이 없습니다. (자동 요약 생성 대기 중)'}
-                    </p>
-                    <div className="flex gap-2 pt-1">
-                      {/* 태그 예시 (임시 - 추후 DB 연동 필요) */}
-                      {['#자동생성', '#AI요약'].map((tag) => (
-                        <span key={tag} className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-bold text-slate-900 group-hover:text-brand-600 transition-colors truncate">
+                      {note.title}
+                    </h3>
+                    <span className="text-xs font-medium text-slate-500 flex items-center bg-slate-100 px-2.5 py-1 rounded-full shrink-0">
+                      <Calendar className="w-3 h-3 mr-1.5" />
+                      {note.date}
+                    </span>
                   </div>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation(); // 카드 클릭 이벤트 전파 방지
-                      // 추후 더보기 메뉴 기능 추가
-                    }}
-                    className="text-slate-300 hover:text-slate-600 p-2 rounded-full hover:bg-slate-50 transition-colors ml-4"
-                  >
-                    <MoreVertical className="w-5 h-5" />
-                  </button>
+                  <p className="text-slate-600 text-sm line-clamp-2 leading-relaxed max-w-2xl">
+                    {note.summary || '요약 내용이 없습니다. (자동 요약 생성 대기 중)'}
+                  </p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
           )}
@@ -257,20 +238,29 @@ interface StatCardProps {
   clickable?: boolean;
 }
 
-const StatCard = ({ icon, label, value, subText, bgColor, onClick, clickable }: StatCardProps) => (
-  <div 
-    className={`bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex items-center gap-5 ${clickable ? 'cursor-pointer hover:border-brand-200' : ''}`}
-    onClick={onClick}
-  >
-    <div className={`p-4 rounded-xl ${bgColor}`}>
-      {icon}
-    </div>
-    <div>
-      <p className="text-sm font-semibold text-slate-500 mb-1">{label}</p>
-      <h3 className="text-2xl font-extrabold text-slate-900">{value}</h3>
-      {subText && <p className="text-xs font-medium text-rose-500 mt-1">{subText}</p>}
-    </div>
-  </div>
-);
+const StatCard = ({ icon, label, value, subText, bgColor, onClick, clickable }: StatCardProps) => {
+  const content = (
+    <>
+      <div className={`p-4 rounded-xl shrink-0 ${bgColor}`}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-500 mb-1">{label}</p>
+        <h3 className="text-2xl font-extrabold text-slate-900 truncate">{value}</h3>
+        {subText && <p className="text-xs font-medium text-slate-500 mt-1 truncate">{subText}</p>}
+      </div>
+    </>
+  );
+  const cardClass = "bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex items-center gap-5";
+
+  if (clickable) {
+    return (
+      <button onClick={onClick} className={`${cardClass} hover:border-brand-200 text-left w-full`}>
+        {content}
+      </button>
+    );
+  }
+  return <div className={cardClass}>{content}</div>;
+};
 
 export default Dashboard;

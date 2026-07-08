@@ -128,7 +128,9 @@ const Layout = () => {
               )}
               <button
                 onClick={toggleMenu}
-                className="p-2 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:outline-none"
+                aria-label={isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}
+                aria-expanded={isMenuOpen}
+                className="p-2 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               >
                 {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
               </button>

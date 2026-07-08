@@ -346,6 +346,8 @@ const NoteDetail = () => {
             <div className="relative">
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
+                aria-label="더보기 메뉴"
+                aria-expanded={isMenuOpen}
                 className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <MoreVertical className="w-5 h-5" />
@@ -419,6 +421,7 @@ const NoteDetail = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={player.togglePlay}
+            aria-label={player.isPlaying ? '일시정지' : '재생'}
             className="p-3 bg-brand-600 text-white rounded-full hover:bg-brand-700 transition-colors"
           >
             {player.isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
@@ -428,6 +431,7 @@ const NoteDetail = () => {
             <div className="relative">
               <input
                 type="range"
+                aria-label="재생 위치"
                 min={0}
                 max={player.duration || 100}
                 value={player.currentTime}
@@ -521,6 +525,7 @@ const NoteDetail = () => {
 
           <button
             onClick={player.toggleMute}
+            aria-label={player.isMuted ? '음소거 해제' : '음소거'}
             className="p-2 text-slate-500 hover:text-slate-700 transition-colors"
           >
             {player.isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}

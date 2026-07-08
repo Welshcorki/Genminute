@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Search, Calendar, Share2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { shareService, type SharedMeeting } from '../services/share';
 
 const SharedNoteList = () => {
-  const navigate = useNavigate();
   const [meetings, setMeetings] = useState<SharedMeeting[]>([]);
   const [filteredMeetings, setFilteredMeetings] = useState<SharedMeeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,36 +82,32 @@ const SharedNoteList = () => {
       ) : (
         <div className="grid gap-4">
           {filteredMeetings.map((meeting) => (
-            <div
+            <Link
               key={meeting.meeting_id}
-              onClick={() => navigate(`/notes/${meeting.meeting_id}`)}
-              className="group bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-brand-200 transition-all duration-200 cursor-pointer"
+              to={`/notes/${meeting.meeting_id}`}
+              className="group block bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-brand-200 transition-all duration-200"
             >
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
-                      <Calendar className="w-3 h-3 mr-1" />
-                      {meeting.date}
-                    </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-50 text-brand-700 border border-brand-100">
-                      <Share2 className="w-3 h-3 mr-1" />
-                      공유받음
-                    </span>
-                  </div>
-                  
-                  <div className="block group-hover:text-brand-600 transition-colors">
-                    <h3 className="text-lg font-bold text-slate-900 truncate mb-1">
-                      {meeting.title}
-                    </h3>
-                  </div>
-                  
-                  <p className="text-slate-600 text-sm line-clamp-2 leading-relaxed">
-                    {meeting.summary || '아직 요약된 내용이 없습니다. 클릭하여 상세 내용을 확인하세요.'}
-                  </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
+                    <Calendar className="w-3 h-3 mr-1" />
+                    {meeting.date}
+                  </span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-50 text-brand-700 border border-brand-100">
+                    <Share2 className="w-3 h-3 mr-1" />
+                    공유받음
+                  </span>
                 </div>
+
+                <h3 className="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition-colors truncate mb-1">
+                  {meeting.title}
+                </h3>
+
+                <p className="text-slate-600 text-sm line-clamp-2 leading-relaxed">
+                  {meeting.summary || '아직 요약된 내용이 없습니다. 클릭하여 상세 내용을 확인하세요.'}
+                </p>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

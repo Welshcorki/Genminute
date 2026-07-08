@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Search, Calendar, Filter, MoreVertical, FileText, LogIn, X, ArrowUp, ArrowDown } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, Calendar, Filter, FileText, LogIn, X, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { meetingService, type Meeting, type PaginatedMeetingsResponse } from '../services/meeting';
 
@@ -10,7 +10,6 @@ type SortType = 'date' | 'title';
 type SortDirection = 'asc' | 'desc';
 
 const NoteList = () => {
-  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   
   // 상태 관리
@@ -239,7 +238,9 @@ const NoteList = () => {
               )}
             </button>
           </div>
-          <button 
+          <button
+            aria-label="날짜 필터"
+            aria-expanded={showDateFilter}
             onClick={() => setShowDateFilter(!showDateFilter)}
             className={`p-2 border rounded-xl hover:bg-slate-50 transition-colors ${
               hasDateFilter 
@@ -343,57 +344,28 @@ const NoteList = () => {
         <>
           <div className="grid gap-4">
             {meetings.map((meeting) => (
-              <div
+              <Link
                 key={meeting.meeting_id}
-                onClick={() => navigate(`/notes/${meeting.meeting_id}`)}
-                className="group bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-brand-200 transition-all duration-200 cursor-pointer"
+                to={`/notes/${meeting.meeting_id}`}
+                className="group block bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-brand-200 transition-all duration-200"
               >
-                <div className="flex justify-between items-start gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
-                        <Calendar className="w-3 h-3 mr-1" />
-                        {meeting.date}
-                      </span>
-                      {/* 오디오/비디오 타입 뱃지 (추후 데이터 연동 시 실제 값으로 대체) */}
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-50 text-brand-700 border border-brand-100">
-                        Audio
-                      </span>
-                    </div>
-                    
-                    <div className="block group-hover:text-brand-600 transition-colors">
-                      <h3 className="text-lg font-bold text-slate-900 truncate mb-1">
-                        {meeting.title}
-                      </h3>
-                    </div>
-                    
-                    <p className="text-slate-600 text-sm line-clamp-2 leading-relaxed">
-                      {meeting.summary || '아직 요약된 내용이 없습니다. 클릭하여 상세 내용을 확인하세요.'}
-                    </p>
-                    
-                    <div className="flex gap-2 mt-3">
-                      {/* 태그 (임시) */}
-                      {['#회의', '#기획'].map((tag, i) => (
-                        <span key={i} className="text-xs text-slate-400 font-medium">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
+                      <Calendar className="w-3 h-3 mr-1" />
+                      {meeting.date}
+                    </span>
                   </div>
 
-                  <div className="flex items-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation(); // 카드 클릭 이벤트 전파 방지
-                        // 추후 더보기 메뉴 기능 추가
-                      }}
-                      className="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
-                    >
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition-colors truncate mb-1">
+                    {meeting.title}
+                  </h3>
+
+                  <p className="text-slate-600 text-sm line-clamp-2 leading-relaxed">
+                    {meeting.summary || '아직 요약된 내용이 없습니다. 클릭하여 상세 내용을 확인하세요.'}
+                  </p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
           
