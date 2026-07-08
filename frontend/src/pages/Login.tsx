@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import WaveformMotif from '../components/WaveformMotif';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -63,12 +64,9 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-brand-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* 배경 효과 */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-brand-500/20 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-teal-500/20 rounded-full blur-3xl"></div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-brand-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* 시그니처 파형 — Dashboard 히어로와 같은 시각 언어 */}
+      <WaveformMotif className="absolute inset-x-0 bottom-0 h-24 w-full text-brand-400/15" />
 
       <div className="relative sm:mx-auto sm:w-full sm:max-w-md">
         {/* 로고 및 타이틀 */}
@@ -87,16 +85,16 @@ const Login = () => {
       </div>
 
       <div className="relative mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white/10 backdrop-blur-lg py-8 px-6 shadow-2xl rounded-2xl border border-white/20">
+        <div className="bg-white py-8 px-6 shadow-2xl rounded-2xl">
           {/* 에러 메시지 */}
             {error && (
-            <div className="mb-6 rounded-lg bg-red-500/20 border border-red-500/30 p-4">
+            <div className="mb-6 rounded-lg bg-red-50 border border-red-200 p-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <AlertCircle className="h-5 w-5 text-red-400" aria-hidden="true" />
+                    <AlertCircle className="h-5 w-5 text-red-500" aria-hidden="true" />
                   </div>
                   <div className="ml-3">
-                  <p className="text-sm text-red-200">{error}</p>
+                  <p className="text-sm text-red-700">{error}</p>
                 </div>
               </div>
             </div>
@@ -106,10 +104,10 @@ const Login = () => {
               <button
             onClick={handleGoogleLogin}
             disabled={isLoading}
-            className={`w-full flex justify-center items-center py-3 px-4 rounded-xl shadow-lg text-base font-medium transition-all duration-200 ${
+            className={`w-full flex justify-center items-center py-3 px-4 rounded-xl border border-slate-200 text-base font-medium transition-all duration-200 ${
               isLoading
-                ? 'bg-white/50 cursor-not-allowed'
-                : 'bg-white hover:bg-gray-100 hover:shadow-xl hover:-translate-y-0.5'
+                ? 'bg-slate-100 cursor-not-allowed'
+                : 'bg-white hover:bg-slate-50 shadow-sm hover:shadow-md'
                 }`}
               >
                 {isLoading ? (
@@ -144,20 +142,20 @@ const Login = () => {
 
           {/* 안내 문구 */}
           <div className="mt-6 text-center">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-500">
               Google 계정으로 간편하게 시작하세요
             </p>
           </div>
-          
+
           {/* 서비스 약관 */}
           <div className="mt-6 text-center">
             <p className="text-xs text-slate-500">
               로그인 시{' '}
-              <a href="#" className="text-brand-400 hover:text-brand-300 underline">
+              <a href="#" className="text-brand-600 hover:text-brand-700 underline">
                 서비스 약관
               </a>
               {' '}및{' '}
-              <a href="#" className="text-brand-400 hover:text-brand-300 underline">
+              <a href="#" className="text-brand-600 hover:text-brand-700 underline">
                 개인정보처리방침
               </a>
               에 동의하게 됩니다.

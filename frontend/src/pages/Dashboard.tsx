@@ -4,6 +4,7 @@ import { Mic, Upload, Clock, FileText, Calendar, ChevronRight, File, LogIn } fro
 import { useAuth } from '../contexts/AuthContext';
 import { meetingService, type Meeting, type UserStats } from '../services/meeting';
 import { UploadModal } from '../components/UploadModal';
+import WaveformMotif from '../components/WaveformMotif';
 
 const Dashboard = () => {
   const { user: authUser, isAuthenticated } = useAuth();
@@ -46,18 +47,17 @@ const Dashboard = () => {
   return (
     <div className="space-y-10">
       {/* 1. 환영 메시지 & 빠른 액션 */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-brand-950 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
-        {/* Decorative background blur */}
-        <div className="absolute -top-24 -right-24 w-80 h-80 bg-brand-500/30 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-teal-500/20 rounded-full blur-3xl"></div>
-        
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-brand-950 rounded-2xl p-8 pb-14 text-white shadow-xl relative overflow-hidden border border-slate-800">
+        {/* 시그니처 파형 — 하단 가장자리 장식 */}
+        <WaveformMotif className="absolute inset-x-0 bottom-0 h-14 w-full text-brand-400/20" />
+
         <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
           <div>
             <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
               {isAuthenticated ? (
-                <>안녕하세요, <span className="text-brand-200">{authUser?.name || '사용자'}</span>님! 👋</>
+                <>안녕하세요, <span className="text-brand-200">{authUser?.name || '사용자'}</span>님</>
               ) : (
-                <>GenMinute에 오신 것을 환영합니다! 👋</>
+                <>GenMinute에 오신 것을 환영합니다</>
               )}
             </h1>
             <p className="text-slate-400 text-lg leading-relaxed">
