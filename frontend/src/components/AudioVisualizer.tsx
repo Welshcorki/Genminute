@@ -17,7 +17,7 @@ export const AudioVisualizer = ({
   analyser,
   isRecording,
   className = '',
-  barColor = '#4f46e5', // indigo-600
+  barColor = '#4f46e5', // brand-600
   backgroundColor = '#f8fafc', // slate-50
 }: AudioVisualizerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);

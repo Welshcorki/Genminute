@@ -60,8 +60,8 @@ const Layout = () => {
                           className="h-8 w-8 rounded-full object-cover border-2 border-slate-200"
                         />
                       ) : (
-                        <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                          <User size={18} className="text-indigo-600" />
+                        <div className="h-8 w-8 rounded-full bg-brand-100 flex items-center justify-center">
+                          <User size={18} className="text-brand-600" />
                         </div>
                       )}
                       <span className="text-sm font-medium text-slate-700 hidden lg:block">
@@ -93,7 +93,7 @@ const Layout = () => {
                 ) : (
                   <Link
                     to="/login"
-                    className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm"
+                    className="flex items-center space-x-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium text-sm"
                   >
                     <LogIn size={18} />
                     <span className="hidden lg:inline">로그인</span>
@@ -113,14 +113,14 @@ const Layout = () => {
                     className="h-8 w-8 rounded-full object-cover border-2 border-slate-200"
                   />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                    <User size={18} className="text-indigo-600" />
+                  <div className="h-8 w-8 rounded-full bg-brand-100 flex items-center justify-center">
+                    <User size={18} className="text-brand-600" />
                   </div>
                 )
               ) : (
                 <Link
                   to="/login"
-                  className="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                  className="flex items-center space-x-1 px-3 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium"
                 >
                   <LogIn size={16} />
                   <span>로그인</span>
@@ -180,7 +180,7 @@ const Layout = () => {
                   <Link
                     to="/login"
                     onClick={closeMenu}
-                    className="w-full flex items-center space-x-4 px-4 py-3 rounded-lg text-base font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                    className="w-full flex items-center space-x-4 px-4 py-3 rounded-lg text-base font-semibold bg-brand-600 text-white hover:bg-brand-700 transition-colors"
                   >
                     <LogIn size={20} />
                     <span>로그인</span>

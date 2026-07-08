@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import { SPEAKER_COLORS } from '../config/speakers';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -8,23 +9,13 @@ interface SpeakerShareChartProps {
   speakerShare: Record<string, number>;
 }
 
-// 화자별 지정 색상 매핑 (NoteDetail의 getSpeakerColor과 일치하도록 유사 톤 사용)
-const SPEAKER_COLORS = [
-  '#6366f1', // indigo-500
-  '#14b8a6', // teal-500
-  '#f43f5e', // rose-500
-  '#f59e0b', // amber-500
-  '#a855f7', // purple-500
-  '#0ea5e9', // cyan-500
-];
-
 export default function SpeakerShareChart({ speakerShare }: SpeakerShareChartProps) {
   const data = useMemo(() => {
     const labels = Object.keys(speakerShare);
     const dataPoints = Object.values(speakerShare);
     
     // 차별화된 색상 부여를 위해 라벨 개수만큼 색상 생성
-    const backgroundColors = labels.map((_, i) => SPEAKER_COLORS[i % SPEAKER_COLORS.length]);
+    const backgroundColors = labels.map((_, i) => SPEAKER_COLORS[i % SPEAKER_COLORS.length].hex);
 
     return {
       labels,
@@ -73,7 +64,7 @@ export default function SpeakerShareChart({ speakerShare }: SpeakerShareChartPro
 
   return (
     <div className="flex flex-col items-center p-4 bg-white rounded-xl border border-slate-100 shadow-sm">
-      <h3 className="text-sm font-semibold text-slate-700 w-full mb-4 pl-2 border-l-4 border-indigo-500">
+      <h3 className="text-sm font-semibold text-slate-700 w-full mb-4 pl-2 border-l-4 border-brand-500">
         화자별 발언 비중
       </h3>
       {hasData ? (

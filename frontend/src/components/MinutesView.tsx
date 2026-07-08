@@ -57,7 +57,7 @@ const MinutesView = ({ meetingId }: MinutesViewProps) => {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
+        <Loader2 className="w-8 h-8 text-brand-600 animate-spin mb-4" />
         <p className="text-slate-500">회의록을 불러오는 중...</p>
       </div>
     );
@@ -73,7 +73,7 @@ const MinutesView = ({ meetingId }: MinutesViewProps) => {
         <p className="text-slate-600 mb-4">{error}</p>
         <button
           onClick={loadMinutes}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
         >
           다시 시도
         </button>
@@ -95,7 +95,7 @@ const MinutesView = ({ meetingId }: MinutesViewProps) => {
           <button
             onClick={handleGenerate}
             disabled={isGenerating}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
               <>
@@ -118,7 +118,7 @@ const MinutesView = ({ meetingId }: MinutesViewProps) => {
         <button
           onClick={handleGenerate}
           disabled={isGenerating}
-          className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isGenerating ? (
             <>
@@ -143,7 +143,7 @@ const MinutesView = ({ meetingId }: MinutesViewProps) => {
             }
             if (line.startsWith('## ')) {
               return (
-                <h2 key={`h2-${index}`} className="text-xl font-bold text-slate-900 mt-5 mb-2 border-b border-indigo-500 pb-1">
+                <h2 key={`h2-${index}`} className="text-xl font-bold text-slate-900 mt-5 mb-2 border-b border-brand-500 pb-1">
                   {line.substring(3)}
                 </h2>
               );

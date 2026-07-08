@@ -189,7 +189,7 @@ const ChatSidebar = ({ meetingId, meetingTitle }: ChatSidebarProps) => {
       {/* 헤더 */}
       <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-white">
         <div className="flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-indigo-600" />
+          <MessageSquare className="w-5 h-5 text-brand-600" />
           <div>
             <h3 className="font-semibold text-slate-900 text-sm">AI 질문</h3>
             {meetingTitle && (
@@ -225,7 +225,7 @@ const ChatSidebar = ({ meetingId, meetingTitle }: ChatSidebarProps) => {
             <div
               className={`max-w-[85%] rounded-lg p-3 ${
                 message.role === 'user'
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-brand-600 text-white'
                   : 'bg-white text-slate-900 border border-slate-200 shadow-sm'
               }`}
             >
@@ -239,7 +239,7 @@ const ChatSidebar = ({ meetingId, meetingTitle }: ChatSidebarProps) => {
                     {message.sources.map((source, index) => (
                       <div
                         key={index}
-                        className="text-xs text-indigo-600 flex items-center gap-1"
+                        className="text-xs text-brand-600 flex items-center gap-1"
                       >
                         <span>{source.subtopic_title || source.title}</span>
                         {source.start_time !== undefined && (
@@ -259,7 +259,7 @@ const ChatSidebar = ({ meetingId, meetingTitle }: ChatSidebarProps) => {
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-white rounded-lg p-3 border border-slate-200 shadow-sm">
-              <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+              <Loader2 className="w-5 h-5 animate-spin text-brand-600" />
             </div>
           </div>
         )}
@@ -277,7 +277,7 @@ const ChatSidebar = ({ meetingId, meetingTitle }: ChatSidebarProps) => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="이 회의에 대해 질문하세요..."
-              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent pr-10"
+              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent pr-10"
               rows={1}
               disabled={isLoading}
             />
@@ -298,7 +298,7 @@ const ChatSidebar = ({ meetingId, meetingTitle }: ChatSidebarProps) => {
           <button
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
-            className="w-10 h-10 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center flex-shrink-0"
+            className="w-10 h-10 bg-brand-600 text-white rounded-full hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center flex-shrink-0"
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />

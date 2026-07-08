@@ -1,3 +1,5 @@
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,4 +9,10 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
+}
+
+/* 키보드 포커스 표시 — 마우스 클릭에는 나타나지 않음 */
+:focus-visible {
+  outline: 2px solid theme('colors.brand.500');
+  outline-offset: 2px;
 }

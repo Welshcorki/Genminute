@@ -61,7 +61,7 @@ const SharedNoteList = () => {
               placeholder="제목, 내용 검색..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
             />
           </div>
         </div>
@@ -69,7 +69,7 @@ const SharedNoteList = () => {
 
       {/* 목록 영역 */}
       {filteredMeetings.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
+        <div className="text-center py-20 bg-white rounded-2xl border border-slate-100 shadow-sm">
           <div className="inline-flex p-4 bg-slate-50 rounded-full mb-4">
             <Share2 className="w-8 h-8 text-slate-300" />
           </div>
@@ -86,7 +86,7 @@ const SharedNoteList = () => {
             <div
               key={meeting.meeting_id}
               onClick={() => navigate(`/notes/${meeting.meeting_id}`)}
-              className="group bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-amber-200 transition-all duration-200 cursor-pointer"
+              className="group bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-brand-200 transition-all duration-200 cursor-pointer"
             >
               <div className="flex justify-between items-start gap-4">
                 <div className="flex-1 min-w-0">
@@ -95,13 +95,13 @@ const SharedNoteList = () => {
                       <Calendar className="w-3 h-3 mr-1" />
                       {meeting.date}
                     </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-50 text-brand-700 border border-brand-100">
                       <Share2 className="w-3 h-3 mr-1" />
                       공유받음
                     </span>
                   </div>
                   
-                  <div className="block group-hover:text-amber-600 transition-colors">
+                  <div className="block group-hover:text-brand-600 transition-colors">
                     <h3 className="text-lg font-bold text-slate-900 truncate mb-1">
                       {meeting.title}
                     </h3>

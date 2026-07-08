@@ -87,7 +87,7 @@ const ActionItemsView = ({ meetingId }: ActionItemsViewProps) => {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
+        <Loader2 className="w-8 h-8 text-brand-600 animate-spin mb-4" />
         <p className="text-slate-500">Action Items를 불러오는 중...</p>
       </div>
     );
@@ -103,7 +103,7 @@ const ActionItemsView = ({ meetingId }: ActionItemsViewProps) => {
         <p className="text-slate-600 mb-4">{error}</p>
         <button
           onClick={loadActionItems}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
         >
           다시 시도
         </button>
@@ -125,7 +125,7 @@ const ActionItemsView = ({ meetingId }: ActionItemsViewProps) => {
           <button
             onClick={handleExtract}
             disabled={isExtracting}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isExtracting ? (
               <>
@@ -148,7 +148,7 @@ const ActionItemsView = ({ meetingId }: ActionItemsViewProps) => {
         <button
           onClick={handleExtract}
           disabled={isExtracting}
-          className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isExtracting ? (
             <>
@@ -168,7 +168,7 @@ const ActionItemsView = ({ meetingId }: ActionItemsViewProps) => {
             className={`p-4 rounded-lg border-2 transition-all ${
               item.status === 'done'
                 ? 'bg-slate-50 border-slate-200'
-                : 'bg-white border-indigo-200 hover:border-indigo-300'
+                : 'bg-white border-brand-200 hover:border-brand-300'
             }`}
           >
             <div className="flex items-start gap-3">
@@ -176,8 +176,8 @@ const ActionItemsView = ({ meetingId }: ActionItemsViewProps) => {
                 onClick={() => handleToggleStatus(item)}
                 className={`mt-1 flex-shrink-0 transition-colors ${
                   item.status === 'done'
-                    ? 'text-indigo-600 hover:text-indigo-700'
-                    : 'text-slate-400 hover:text-indigo-600'
+                    ? 'text-brand-600 hover:text-brand-700'
+                    : 'text-slate-400 hover:text-brand-600'
                 }`}
               >
                 {item.status === 'done' ? (
@@ -206,7 +206,7 @@ const ActionItemsView = ({ meetingId }: ActionItemsViewProps) => {
                 )}
                 
                 {item.calendar_event_id && (
-                  <div className="mt-2 text-xs text-indigo-600">
+                  <div className="mt-2 text-xs text-brand-600">
                     ✓ Google Calendar에 등록됨
                   </div>
                 )}

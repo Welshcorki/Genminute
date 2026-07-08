@@ -165,13 +165,13 @@ const Recorder = () => {
               disabled={!isAuthenticated}
               className={`group p-6 bg-white border-2 rounded-2xl transition-all text-left ${
                 isAuthenticated
-                  ? 'border-slate-200 hover:border-indigo-500 hover:shadow-lg'
+                  ? 'border-slate-200 hover:border-brand-500 hover:shadow-lg'
                   : 'border-slate-100 opacity-50 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
-                  <Mic className="w-8 h-8 text-indigo-600" />
+                <div className="p-3 bg-brand-50 rounded-xl group-hover:bg-brand-100 transition-colors">
+                  <Mic className="w-8 h-8 text-brand-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">마이크 녹음</h3>
@@ -207,8 +207,8 @@ const Recorder = () => {
                 컴퓨터에서 재생되는 소리를 녹화합니다. 
                 Zoom, Teams, Meet 등 화상회의에 적합합니다.
               </p>
-              <div className="mt-3 p-2 bg-indigo-50 border border-indigo-200 rounded-lg">
-                <p className="text-xs text-indigo-800">
+              <div className="mt-3 p-2 bg-brand-50 border border-brand-200 rounded-lg">
+                <p className="text-xs text-brand-800">
                   💡 화면 공유 시 <strong>"시스템 오디오 공유"</strong>를 체크해주세요
                 </p>
               </div>
@@ -224,7 +224,7 @@ const Recorder = () => {
           <div className="flex items-center justify-center gap-2 mb-6">
             {recordingType === 'mic' ? (
               <>
-                <Mic className="w-5 h-5 text-indigo-600" />
+                <Mic className="w-5 h-5 text-brand-600" />
                 <span className="text-slate-600 font-medium">마이크 녹음</span>
               </>
             ) : (
@@ -275,7 +275,7 @@ const Recorder = () => {
             ) : recordingState === 'paused' ? (
               <button
                 onClick={resumeRecording}
-                className="p-4 bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-200 transition-colors"
+                className="p-4 bg-brand-100 text-brand-600 rounded-full hover:bg-brand-200 transition-colors"
                 title="재개"
               >
                 <Play className="w-6 h-6" />
@@ -321,8 +321,8 @@ const Recorder = () => {
       {pageState === 'uploading' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm text-center">
           <div className="flex justify-center mb-6">
-            <div className="p-4 bg-indigo-50 rounded-full">
-              <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+            <div className="p-4 bg-brand-50 rounded-full">
+              <Loader2 className="w-10 h-10 text-brand-600 animate-spin" />
             </div>
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">분석 중</h2>
@@ -346,7 +346,7 @@ const Recorder = () => {
           <div className="flex justify-center gap-4">
             <button
               onClick={handleCancel}
-              className="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium"
+              className="px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition-colors font-medium"
             >
               처음으로
             </button>
@@ -400,10 +400,10 @@ const PreviewSection = ({
       {/* 녹음 정보 */}
       <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl mb-6">
         <div className={`p-3 rounded-xl ${
-          recordingType === 'mic' ? 'bg-indigo-100' : 'bg-teal-100'
+          recordingType === 'mic' ? 'bg-brand-100' : 'bg-teal-100'
         }`}>
           {recordingType === 'mic' ? (
-            <Mic className="w-6 h-6 text-indigo-600" />
+            <Mic className="w-6 h-6 text-brand-600" />
           ) : (
             <Monitor className="w-6 h-6 text-teal-600" />
           )}
@@ -441,7 +441,7 @@ const PreviewSection = ({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="예: 주간 업무 보고 회의"
-          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
         />
       </div>
 
@@ -456,7 +456,7 @@ const PreviewSection = ({
         <button
           onClick={handleUpload}
           disabled={!title.trim()}
-          className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
+          className="flex-1 px-4 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
         >
           <Upload className="w-5 h-5" />
           분석 시작

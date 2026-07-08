@@ -132,12 +132,12 @@ export const UploadModal = ({ isOpen, onClose, onComplete }: UploadModalProps) =
 
   // 파일 타입 아이콘
   const getFileIcon = () => {
-    if (!selectedFile) return <Upload className="w-8 h-8 text-indigo-600" />;
+    if (!selectedFile) return <Upload className="w-8 h-8 text-brand-600" />;
     const ext = selectedFile.name.split('.').pop()?.toLowerCase();
     if (['mp4', 'webm'].includes(ext || '')) {
-      return <FileVideo className="w-8 h-8 text-indigo-600" />;
+      return <FileVideo className="w-8 h-8 text-brand-600" />;
     }
-    return <FileAudio className="w-8 h-8 text-indigo-600" />;
+    return <FileAudio className="w-8 h-8 text-brand-600" />;
   };
 
   if (!isOpen) return null;
@@ -171,8 +171,8 @@ export const UploadModal = ({ isOpen, onClose, onComplete }: UploadModalProps) =
             <div
               className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
                 isDragging 
-                  ? 'border-indigo-500 bg-indigo-50' 
-                  : 'border-slate-300 hover:border-indigo-400'
+                  ? 'border-brand-500 bg-brand-50' 
+                  : 'border-slate-300 hover:border-brand-400'
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -187,8 +187,8 @@ export const UploadModal = ({ isOpen, onClose, onComplete }: UploadModalProps) =
                 className="hidden"
               />
               <div className="flex justify-center mb-4">
-                <div className="p-4 bg-indigo-50 rounded-full">
-                  <Upload className="w-8 h-8 text-indigo-600" />
+                <div className="p-4 bg-brand-50 rounded-full">
+                  <Upload className="w-8 h-8 text-brand-600" />
                 </div>
               </div>
               <p className="text-slate-600 mb-2">
@@ -245,7 +245,7 @@ export const UploadModal = ({ isOpen, onClose, onComplete }: UploadModalProps) =
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="예: 주간 업무 보고 회의"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
               />
             </div>
 
@@ -264,7 +264,7 @@ export const UploadModal = ({ isOpen, onClose, onComplete }: UploadModalProps) =
                       setTempDate(meetingDate);
                       setIsDatePickerOpen(true);
                     }}
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-left hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-left hover:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
                   >
                     {meetingDate ? (
                       <span className="text-slate-900">
@@ -292,12 +292,12 @@ export const UploadModal = ({ isOpen, onClose, onComplete }: UploadModalProps) =
                 </div>
               ) : (
                 /* 날짜 선택기 (열린 상태) */
-                <div className="border border-indigo-300 rounded-lg p-4 bg-indigo-50/30">
+                <div className="border border-brand-300 rounded-lg p-4 bg-brand-50/30">
                   <input
                     type="datetime-local"
                     value={tempDate}
                     onChange={(e) => setTempDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white"
                     autoFocus
                   />
                   {tempDate && (
@@ -327,7 +327,7 @@ export const UploadModal = ({ isOpen, onClose, onComplete }: UploadModalProps) =
                         setMeetingDate(tempDate);
                         setIsDatePickerOpen(false);
                       }}
-                      className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                      className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
                     >
                       확인
                     </button>
@@ -350,7 +350,7 @@ export const UploadModal = ({ isOpen, onClose, onComplete }: UploadModalProps) =
               <button
                 onClick={handleUpload}
                 disabled={!title.trim()}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 분석 시작
               </button>
@@ -381,7 +381,7 @@ export const UploadModal = ({ isOpen, onClose, onComplete }: UploadModalProps) =
               </button>
               <button
                 onClick={handleRetry}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors flex items-center gap-2"
               >
                 <RotateCcw className="w-4 h-4" />
                 다시 시도

@@ -46,16 +46,16 @@ const Dashboard = () => {
   return (
     <div className="space-y-10">
       {/* 1. 환영 메시지 & 빠른 액션 */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-brand-950 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
         {/* Decorative background blur */}
-        <div className="absolute -top-24 -right-24 w-80 h-80 bg-indigo-500/30 rounded-full blur-3xl"></div>
+        <div className="absolute -top-24 -right-24 w-80 h-80 bg-brand-500/30 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-teal-500/20 rounded-full blur-3xl"></div>
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
           <div>
             <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
               {isAuthenticated ? (
-                <>안녕하세요, <span className="text-indigo-200">{authUser?.name || '사용자'}</span>님! 👋</>
+                <>안녕하세요, <span className="text-brand-200">{authUser?.name || '사용자'}</span>님! 👋</>
               ) : (
                 <>GenMinute에 오신 것을 환영합니다! 👋</>
               )}
@@ -69,7 +69,7 @@ const Dashboard = () => {
               <>
                 <Link
                   to="/record"
-                  className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition-all font-bold shadow-lg hover:shadow-indigo-500/20 active:scale-95"
+                  className="flex items-center px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-500 transition-all font-bold shadow-lg hover:shadow-brand-500/20 active:scale-95"
                 >
                   <Mic className="w-5 h-5 mr-2" />
                   새 기록 시작
@@ -85,7 +85,7 @@ const Dashboard = () => {
             ) : (
               <Link
                 to="/login"
-                className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition-all font-bold shadow-lg hover:shadow-indigo-500/20 active:scale-95"
+                className="flex items-center px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-500 transition-all font-bold shadow-lg hover:shadow-brand-500/20 active:scale-95"
               >
                 <LogIn className="w-5 h-5 mr-2" />
                 로그인하여 시작하기
@@ -99,10 +99,10 @@ const Dashboard = () => {
       {isAuthenticated ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <StatCard
-            icon={<FileText className="w-6 h-6 text-indigo-600" />}
+            icon={<FileText className="w-6 h-6 text-brand-600" />}
             label="이번 달 노트"
             value={stats ? `${stats.monthly_notes}개` : '0개'} 
-            bgColor="bg-indigo-50 border border-indigo-100"
+            bgColor="bg-brand-50 border border-brand-100"
             clickable={true}
             onClick={() => navigate('/notes')}
           />
@@ -132,7 +132,7 @@ const Dashboard = () => {
           <p className="text-slate-600 mb-4">로그인하여 통계와 노트를 확인하세요.</p>
           <Link
             to="/login"
-            className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium"
+            className="inline-flex items-center px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition-colors font-medium"
           >
             <LogIn className="w-5 h-5 mr-2" />
             로그인하기
@@ -145,7 +145,7 @@ const Dashboard = () => {
         <div>
           <div className="flex items-center justify-between mb-6 px-1">
             <h2 className="text-2xl font-bold text-slate-900">최근 내 노트</h2>
-            <Link to="/notes" className="flex items-center text-sm text-slate-500 hover:text-indigo-600 font-semibold transition-colors">
+            <Link to="/notes" className="flex items-center text-sm text-slate-500 hover:text-brand-600 font-semibold transition-colors">
               전체 보기 <ChevronRight className="w-4 h-4 ml-1" />
             </Link>
           </div>
@@ -161,7 +161,7 @@ const Dashboard = () => {
             <p className="text-slate-500 mb-6">첫 번째 회의나 강의를 기록하고 인사이트를 얻어보세요.</p>
             <Link
               to="/record"
-              className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm shadow-md hover:shadow-lg"
+              className="inline-flex items-center px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium text-sm shadow-md hover:shadow-lg"
             >
               <Mic className="w-4 h-4 mr-2" />
               지금 기록하기
@@ -178,7 +178,7 @@ const Dashboard = () => {
                 <div className="flex justify-between items-start">
                   <div className="space-y-3 w-full">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                      <h3 className="text-xl font-bold text-slate-900 group-hover:text-brand-600 transition-colors truncate">
                         {note.title}
                       </h3>
                       <span className="text-xs font-medium text-slate-500 flex items-center bg-slate-100 px-2.5 py-1 rounded-full shrink-0">
@@ -259,7 +259,7 @@ interface StatCardProps {
 
 const StatCard = ({ icon, label, value, subText, bgColor, onClick, clickable }: StatCardProps) => (
   <div 
-    className={`bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex items-center gap-5 ${clickable ? 'cursor-pointer hover:border-indigo-200' : ''}`}
+    className={`bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex items-center gap-5 ${clickable ? 'cursor-pointer hover:border-brand-200' : ''}`}
     onClick={onClick}
   >
     <div className={`p-4 rounded-xl ${bgColor}`}>

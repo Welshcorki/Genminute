@@ -29,6 +29,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { meetingService, type MeetingDetail } from '../services/meeting';
+import { SPEAKER_COLORS, getSpeakerColorByIndex } from '../config/speakers';
 import SummaryView from '../components/SummaryView';
 import MindmapView from '../components/MindmapView';
 import MinutesView from '../components/MinutesView';
@@ -224,23 +225,15 @@ const NoteDetail = () => {
   };
 
   const getSpeakerColor = (speaker: string): string => {
-    const colors = [
-      'bg-indigo-100 text-indigo-700 border-indigo-200',
-      'bg-teal-100 text-teal-700 border-teal-200',
-      'bg-rose-100 text-rose-700 border-rose-200',
-      'bg-amber-100 text-amber-700 border-amber-200',
-      'bg-purple-100 text-purple-700 border-purple-200',
-      'bg-cyan-100 text-cyan-700 border-cyan-200',
-    ];
-    if (!meeting?.participants) return colors[0];
+    if (!meeting?.participants) return SPEAKER_COLORS[0].chip;
     const index = meeting.participants.indexOf(speaker);
-    return colors[index % colors.length];
+    return getSpeakerColorByIndex(index).chip;
   };
 
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
+        <Loader2 className="w-10 h-10 text-brand-600 animate-spin mb-4" />
         <p className="text-slate-500">회의록을 불러오는 중...</p>
       </div>
     );
@@ -256,7 +249,7 @@ const NoteDetail = () => {
         <p className="text-slate-500 mb-6">{error}</p>
         <Link
           to="/notes"
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
         >
           노트 목록으로
         </Link>
@@ -286,7 +279,7 @@ const NoteDetail = () => {
                   type="text"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="text-2xl font-bold text-slate-900 border border-indigo-300 rounded-lg px-3 py-1 flex-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="text-2xl font-bold text-slate-900 border border-brand-300 rounded-lg px-3 py-1 flex-1 focus:outline-none focus:ring-2 focus:ring-brand-500"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSaveTitle();
@@ -295,7 +288,7 @@ const NoteDetail = () => {
                 />
                 <button
                   onClick={handleSaveTitle}
-                  className="px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                  className="px-3 py-1 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors text-sm"
                 >
                   저장
                 </button>
@@ -316,12 +309,12 @@ const NoteDetail = () => {
                     type="datetime-local"
                     value={editDate}
                     onChange={(e) => setEditDate(e.target.value)}
-                    className="border border-indigo-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="border border-brand-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                     autoFocus
                   />
                   <button
                     onClick={handleSaveDate}
-                    className="px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs"
+                    className="px-2 py-1 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors text-xs"
                   >
                     저장
                   </button>
@@ -426,7 +419,7 @@ const NoteDetail = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={player.togglePlay}
-            className="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors"
+            className="p-3 bg-brand-600 text-white rounded-full hover:bg-brand-700 transition-colors"
           >
             {player.isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
           </button>
@@ -439,11 +432,11 @@ const NoteDetail = () => {
                 max={player.duration || 100}
                 value={player.currentTime}
                 onChange={(e) => transcriptSync.handleTimeSeek(parseFloat(e.target.value))}
-                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-600"
               />
               {player.loopStart !== null && player.loopEnd !== null && (
                 <div
-                  className="absolute top-0 h-2 bg-indigo-300 rounded-lg pointer-events-none"
+                  className="absolute top-0 h-2 bg-brand-300 rounded-lg pointer-events-none"
                   style={{
                     left: `${(player.loopStart / player.duration) * 100}%`,
                     width: `${((player.loopEnd - player.loopStart) / player.duration) * 100}%`,
@@ -451,12 +444,12 @@ const NoteDetail = () => {
                 />
               )}
             </div>
-            <div className="flex justify-between text-xs text-slate-500 mt-1">
+            <div className="flex justify-between text-xs font-mono text-slate-500 mt-1">
               <span>{player.formatTime(player.currentTime)}</span>
               <span>{player.formatTime(player.duration)}</span>
             </div>
             {player.loopStart !== null && player.loopEnd !== null && (
-              <div className="text-xs text-indigo-600 mt-1">
+              <div className="text-xs font-mono text-brand-600 mt-1">
                 반복: {player.formatTime(player.loopStart)} - {player.formatTime(player.loopEnd)}
               </div>
             )}
@@ -467,7 +460,7 @@ const NoteDetail = () => {
             <select
               value={player.playbackRate}
               onChange={(e) => player.setPlaybackRate(parseFloat(e.target.value))}
-              className="text-sm border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="text-sm border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value={0.5}>0.5x</option>
               <option value={0.75}>0.75x</option>
@@ -484,7 +477,7 @@ const NoteDetail = () => {
               onClick={() => player.setLoopPoint('start')}
               className={`p-2 rounded-lg transition-colors ${
                 player.loopStart !== null
-                  ? 'bg-indigo-100 text-indigo-600'
+                  ? 'bg-brand-100 text-brand-600'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
               }`}
               title="반복 시작점 설정"
@@ -495,7 +488,7 @@ const NoteDetail = () => {
               onClick={() => player.setLoopPoint('end')}
               className={`p-2 rounded-lg transition-colors ${
                 player.loopEnd !== null
-                  ? 'bg-indigo-100 text-indigo-600'
+                  ? 'bg-brand-100 text-brand-600'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
               }`}
               title="반복 끝점 설정"
@@ -508,7 +501,7 @@ const NoteDetail = () => {
                   onClick={player.toggleLoop}
                   className={`p-2 rounded-lg transition-colors ${
                     player.isLooping
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-brand-600 text-white'
                       : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                   }`}
                   title="구간 반복 재생"
@@ -538,7 +531,7 @@ const NoteDetail = () => {
               onClick={() => player.setShowWaveform(!player.showWaveform)}
               className={`p-2 rounded-lg transition-colors ${
                 player.showWaveform
-                  ? 'bg-indigo-100 text-indigo-600'
+                  ? 'bg-brand-100 text-brand-600'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
               }`}
               title="파형 시각화"
@@ -564,7 +557,7 @@ const NoteDetail = () => {
             onClick={() => setActiveTab(tab.id as TabType)}
             className={`flex items-center gap-2 px-4 py-3 border-b-2 font-medium transition-colors ${
               activeTab === tab.id
-                ? 'border-indigo-600 text-indigo-600'
+                ? 'border-brand-600 text-brand-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -591,7 +584,7 @@ const NoteDetail = () => {
                     onClick={() => transcriptSync.handleSegmentClick(segment)}
                     className={`p-4 rounded-lg cursor-pointer transition-all ${
                       transcriptSync.activeSegmentId === segment.id
-                        ? 'bg-indigo-50 ring-2 ring-indigo-500'
+                        ? 'bg-brand-50 ring-2 ring-brand-500'
                         : 'hover:bg-slate-50'
                     }`}
                   >
@@ -599,7 +592,7 @@ const NoteDetail = () => {
                       <span className={`px-2 py-1 text-xs font-medium rounded border ${getSpeakerColor(segment.speaker_label)}`}>
                         {segment.speaker_label}
                       </span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs font-mono text-slate-400">
                         {player.formatTime(segment.start_time)} - {player.formatTime(segment.end_time)}
                       </span>
                     </div>

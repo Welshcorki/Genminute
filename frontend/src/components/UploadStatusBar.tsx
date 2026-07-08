@@ -68,7 +68,7 @@ const UploadTaskItem = ({ task }: { task: UploadTask }) => {
             <>
               <button
                 onClick={handleViewResult}
-                className="p-1 hover:bg-slate-100 rounded text-indigo-500 hover:text-indigo-600 transition-colors"
+                className="p-1 hover:bg-slate-100 rounded text-brand-500 hover:text-brand-600 transition-colors"
                 title="결과 보기"
               >
                 <ExternalLink className="w-4 h-4" />
@@ -98,15 +98,15 @@ const UploadTaskItem = ({ task }: { task: UploadTask }) => {
       <div className="flex items-center gap-2">
         {task.status === 'uploading' && (
           <>
-            <Loader2 className="w-3 h-3 animate-spin text-indigo-600 flex-shrink-0" />
+            <Loader2 className="w-3 h-3 animate-spin text-brand-600 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-slate-500">{stepInfo.label}</span>
-                <span className="text-xs text-slate-400">{stepInfo.percent}%</span>
+                <span className="text-xs font-mono text-slate-400">{stepInfo.percent}%</span>
               </div>
               <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                  className="h-full bg-brand-600 rounded-full transition-all duration-300"
                   style={{ width: `${stepInfo.percent}%` }}
                 />
               </div>
@@ -152,7 +152,7 @@ export const UploadStatusBar = () => {
       >
         <div className="flex items-center gap-2">
           {uploadingCount > 0 && (
-            <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+            <Loader2 className="w-4 h-4 animate-spin text-brand-600" />
           )}
           <span className="font-medium text-slate-900">
             업로드 {uploadingCount > 0 ? `진행 중 (${uploadingCount})` : ''}

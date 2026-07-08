@@ -55,7 +55,7 @@ const Login = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-indigo-600 mx-auto" />
+          <Loader2 className="h-12 w-12 animate-spin text-brand-600 mx-auto" />
           <p className="mt-4 text-gray-600">인증 확인 중...</p>
         </div>
       </div>
@@ -63,10 +63,10 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-brand-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       {/* 배경 효과 */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl"></div>
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-brand-500/20 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-teal-500/20 rounded-full blur-3xl"></div>
       </div>
 
@@ -153,11 +153,11 @@ const Login = () => {
           <div className="mt-6 text-center">
             <p className="text-xs text-slate-500">
               로그인 시{' '}
-              <a href="#" className="text-indigo-400 hover:text-indigo-300 underline">
+              <a href="#" className="text-brand-400 hover:text-brand-300 underline">
                 서비스 약관
               </a>
               {' '}및{' '}
-              <a href="#" className="text-indigo-400 hover:text-indigo-300 underline">
+              <a href="#" className="text-brand-400 hover:text-brand-300 underline">
                 개인정보처리방침
               </a>
               에 동의하게 됩니다.

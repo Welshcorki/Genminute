@@ -241,7 +241,7 @@ const GlobalChatSidebar = ({ hideOnPages = [] }: GlobalChatSidebarProps) => {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed top-1/2 right-0 -translate-y-1/2 translate-x-[35px] w-10 h-[120px] bg-gradient-to-br from-indigo-600 to-indigo-700 hover:translate-x-0 rounded-l-lg shadow-lg z-[999] flex flex-col items-center justify-center gap-2 text-white font-semibold transition-all duration-300 hover:shadow-xl"
+          className="fixed top-1/2 right-0 -translate-y-1/2 translate-x-[35px] w-10 h-[120px] bg-gradient-to-br from-brand-600 to-brand-700 hover:translate-x-0 rounded-l-lg shadow-lg z-[999] flex flex-col items-center justify-center gap-2 text-white font-semibold transition-all duration-300 hover:shadow-xl"
           title="AI Assistant"
         >
           <ChevronLeft className="w-6 h-6" />
@@ -258,7 +258,7 @@ const GlobalChatSidebar = ({ hideOnPages = [] }: GlobalChatSidebarProps) => {
         {/* 헤더 */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-indigo-600" />
+            <MessageSquare className="w-5 h-5 text-brand-600" />
             <h3 className="font-semibold text-slate-900">AI Assistant</h3>
           </div>
           <button
@@ -286,7 +286,7 @@ const GlobalChatSidebar = ({ hideOnPages = [] }: GlobalChatSidebarProps) => {
               <div
                 className={`max-w-[80%] rounded-lg p-3 ${
                   message.role === 'user'
-                    ? 'bg-indigo-600 text-white'
+                    ? 'bg-brand-600 text-white'
                     : 'bg-white text-slate-900 border border-slate-200'
                 }`}
               >
@@ -300,7 +300,7 @@ const GlobalChatSidebar = ({ hideOnPages = [] }: GlobalChatSidebarProps) => {
                       {message.sources.map((source, index) => (
                         <div
                           key={index}
-                          className="text-xs text-indigo-600"
+                          className="text-xs text-brand-600"
                         >
                           {source.title}
                           {source.start_time && (
@@ -320,7 +320,7 @@ const GlobalChatSidebar = ({ hideOnPages = [] }: GlobalChatSidebarProps) => {
           {isLoading && (
             <div className="flex justify-start">
               <div className="bg-white rounded-lg p-3 border border-slate-200">
-                <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                <Loader2 className="w-5 h-5 animate-spin text-brand-600" />
               </div>
             </div>
           )}
@@ -338,7 +338,7 @@ const GlobalChatSidebar = ({ hideOnPages = [] }: GlobalChatSidebarProps) => {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="메시지를 입력하세요..."
-                className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent pr-10"
+                className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent pr-10"
                 rows={1}
                 disabled={isLoading}
               />
@@ -360,7 +360,7 @@ const GlobalChatSidebar = ({ hideOnPages = [] }: GlobalChatSidebarProps) => {
             <button
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
-              className="w-10 h-10 flex-shrink-0 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              className="w-10 h-10 flex-shrink-0 bg-brand-600 text-white rounded-full hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

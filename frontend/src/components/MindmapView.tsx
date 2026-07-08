@@ -112,7 +112,7 @@ export const MindmapView = ({ meetingId }: MindmapViewProps) => {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
+        <Loader2 className="w-8 h-8 text-brand-600 animate-spin mb-4" />
         <p className="text-slate-500">마인드맵을 불러오는 중...</p>
       </div>
     );
@@ -128,7 +128,7 @@ export const MindmapView = ({ meetingId }: MindmapViewProps) => {
         <p className="text-red-600 mb-4">{error}</p>
         <button
           onClick={loadMindmap}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
           다시 시도
@@ -153,7 +153,7 @@ export const MindmapView = ({ meetingId }: MindmapViewProps) => {
         <button
           onClick={handleGenerate}
           disabled={isGenerating}
-          className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+          className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
         >
           {isGenerating ? (
             <>
@@ -179,7 +179,7 @@ export const MindmapView = ({ meetingId }: MindmapViewProps) => {
         <button
           onClick={handleGenerate}
           disabled={isGenerating}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
         >
           {isGenerating ? (
             <Loader2 className="w-4 h-4 animate-spin" />

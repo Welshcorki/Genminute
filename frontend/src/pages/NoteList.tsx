@@ -198,7 +198,7 @@ const NoteList = () => {
               placeholder="제목, 내용 검색..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
             />
           </div>
           <div className="flex gap-2">
@@ -206,7 +206,7 @@ const NoteList = () => {
               onClick={handleDateSortToggle}
               className={`px-3 py-2 rounded-xl border transition-all text-sm font-medium flex items-center ${
                 sortType === 'date'
-                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                  ? 'bg-brand-50 border-brand-200 text-brand-700'
                   : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -224,7 +224,7 @@ const NoteList = () => {
               onClick={handleTitleSortToggle}
               className={`px-3 py-2 rounded-xl border transition-all text-sm font-medium flex items-center ${
                 sortType === 'title'
-                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                  ? 'bg-brand-50 border-brand-200 text-brand-700'
                   : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -243,7 +243,7 @@ const NoteList = () => {
             onClick={() => setShowDateFilter(!showDateFilter)}
             className={`p-2 border rounded-xl hover:bg-slate-50 transition-colors ${
               hasDateFilter 
-                ? 'bg-amber-50 border-amber-200 text-amber-700' 
+                ? 'bg-brand-50 border-brand-200 text-brand-700' 
                 : 'bg-white border-slate-200 text-slate-600'
             }`}
           >
@@ -264,7 +264,7 @@ const NoteList = () => {
                 type="date"
                 value={startDateInput}
                 onChange={(e) => setStartDateInput(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               />
             </div>
             <div className="flex-1">
@@ -275,13 +275,13 @@ const NoteList = () => {
                 type="date"
                 value={endDateInput}
                 onChange={(e) => setEndDateInput(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               />
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleApplyDateFilter}
-                className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
               >
                 필터 적용
               </button>
@@ -301,7 +301,7 @@ const NoteList = () => {
 
       {/* 목록 영역 */}
       {!isAuthenticated ? (
-        <div className="text-center py-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
+        <div className="text-center py-20 bg-white rounded-2xl border border-slate-100 shadow-sm">
           <div className="inline-flex p-4 bg-slate-50 rounded-full mb-4">
             <FileText className="w-8 h-8 text-slate-300" />
           </div>
@@ -313,14 +313,14 @@ const NoteList = () => {
           </p>
           <Link
             to="/login"
-            className="inline-flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium"
+            className="inline-flex items-center px-5 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition-colors font-medium"
           >
             <LogIn className="w-5 h-5 mr-2" />
             로그인하기
           </Link>
         </div>
       ) : meetings.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
+        <div className="text-center py-20 bg-white rounded-2xl border border-slate-100 shadow-sm">
           <div className="inline-flex p-4 bg-slate-50 rounded-full mb-4">
             <FileText className="w-8 h-8 text-slate-300" />
           </div>
@@ -346,7 +346,7 @@ const NoteList = () => {
               <div
                 key={meeting.meeting_id}
                 onClick={() => navigate(`/notes/${meeting.meeting_id}`)}
-                className="group bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-amber-200 transition-all duration-200 cursor-pointer"
+                className="group bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-brand-200 transition-all duration-200 cursor-pointer"
               >
                 <div className="flex justify-between items-start gap-4">
                   <div className="flex-1 min-w-0">
@@ -356,12 +356,12 @@ const NoteList = () => {
                         {meeting.date}
                       </span>
                       {/* 오디오/비디오 타입 뱃지 (추후 데이터 연동 시 실제 값으로 대체) */}
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-50 text-brand-700 border border-brand-100">
                         Audio
                       </span>
                     </div>
                     
-                    <div className="block group-hover:text-amber-600 transition-colors">
+                    <div className="block group-hover:text-brand-600 transition-colors">
                       <h3 className="text-lg font-bold text-slate-900 truncate mb-1">
                         {meeting.title}
                       </h3>
