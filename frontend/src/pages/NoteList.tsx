@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, Calendar, Filter, FileText, LogIn, X, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { meetingService, type Meeting, type PaginatedMeetingsResponse } from '../services/meeting';
+import { Skeleton, NoteCardSkeleton } from '../components/Skeleton';
 
 const PER_PAGE = 10;
 
@@ -174,8 +175,19 @@ const NoteList = () => {
   
   if (isLoading && meetings.length === 0) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-slate-500 animate-pulse">노트 목록을 불러오는 중...</div>
+      <div className="space-y-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <Skeleton className="h-8 w-32 mb-2" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <Skeleton className="h-10 w-full md:w-80 rounded-xl" />
+        </div>
+        <div className="grid gap-4">
+          <NoteCardSkeleton />
+          <NoteCardSkeleton />
+          <NoteCardSkeleton />
+        </div>
       </div>
     );
   }
@@ -371,10 +383,8 @@ const NoteList = () => {
           
           {/* 무한 스크롤 트리거 및 로딩 표시 */}
           {hasMore && (
-            <div ref={observerTarget} className="py-8 text-center">
-              {isLoadingMore && (
-                <div className="text-slate-500 animate-pulse">더 많은 노트를 불러오는 중...</div>
-              )}
+            <div ref={observerTarget} className="py-4">
+              {isLoadingMore && <NoteCardSkeleton />}
             </div>
           )}
           

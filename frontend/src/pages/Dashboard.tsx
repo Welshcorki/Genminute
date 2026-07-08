@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { meetingService, type Meeting, type UserStats } from '../services/meeting';
 import { UploadModal } from '../components/UploadModal';
 import WaveformMotif from '../components/WaveformMotif';
+import { Skeleton, NoteCardSkeleton } from '../components/Skeleton';
 
 const Dashboard = () => {
   const { user: authUser, isAuthenticated } = useAuth();
@@ -41,7 +42,20 @@ const Dashboard = () => {
   }, [isAuthenticated]);
 
   if (isLoading) {
-    return <div className="p-10 text-center text-slate-500">데이터를 불러오는 중...</div>;
+    return (
+      <div className="space-y-10">
+        <Skeleton className="h-48 rounded-2xl" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
+        </div>
+        <div className="grid gap-5">
+          <NoteCardSkeleton />
+          <NoteCardSkeleton />
+        </div>
+      </div>
+    );
   }
 
   return (

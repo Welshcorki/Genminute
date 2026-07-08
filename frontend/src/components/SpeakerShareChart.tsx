@@ -7,15 +7,21 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface SpeakerShareChartProps {
   speakerShare: Record<string, number>;
+  /** 참석자 목록 — 전사 스크립트의 화자 칩과 색 순서를 맞추기 위한 기준 */
+  participants?: string[];
 }
 
-export default function SpeakerShareChart({ speakerShare }: SpeakerShareChartProps) {
+export default function SpeakerShareChart({ speakerShare, participants }: SpeakerShareChartProps) {
   const data = useMemo(() => {
     const labels = Object.keys(speakerShare);
     const dataPoints = Object.values(speakerShare);
-    
-    // 차별화된 색상 부여를 위해 라벨 개수만큼 색상 생성
-    const backgroundColors = labels.map((_, i) => SPEAKER_COLORS[i % SPEAKER_COLORS.length].hex);
+
+    // 참석자 목록 순서를 기준으로 색을 배정해 스크립트의 화자 칩과 일치시킴
+    const backgroundColors = labels.map((label, i) => {
+      const index = participants ? participants.indexOf(label) : i;
+      const safeIndex = index >= 0 ? index : i;
+      return SPEAKER_COLORS[safeIndex % SPEAKER_COLORS.length].hex;
+    });
 
     return {
       labels,
@@ -29,7 +35,7 @@ export default function SpeakerShareChart({ speakerShare }: SpeakerShareChartPro
         },
       ],
     };
-  }, [speakerShare]);
+  }, [speakerShare, participants]);
 
   const options = {
     responsive: true,
@@ -38,7 +44,7 @@ export default function SpeakerShareChart({ speakerShare }: SpeakerShareChartPro
       legend: {
         position: 'right' as const,
         labels: {
-          font: { family: "'Inter', sans-serif", size: 12 },
+          font: { family: "'Pretendard Variable', 'Pretendard', sans-serif", size: 12 },
           color: '#475569',
           usePointStyle: true,
           padding: 20

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, Calendar, Share2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { shareService, type SharedMeeting } from '../services/share';
+import { Skeleton, NoteCardSkeleton } from '../components/Skeleton';
 
 const SharedNoteList = () => {
   const [meetings, setMeetings] = useState<SharedMeeting[]>([]);
@@ -37,8 +38,19 @@ const SharedNoteList = () => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-slate-500 animate-pulse">공유받은 노트 목록을 불러오는 중...</div>
+      <div className="space-y-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <Skeleton className="h-8 w-40 mb-2" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <Skeleton className="h-10 w-full md:w-80 rounded-xl" />
+        </div>
+        <div className="grid gap-4">
+          <NoteCardSkeleton />
+          <NoteCardSkeleton />
+          <NoteCardSkeleton />
+        </div>
       </div>
     );
   }

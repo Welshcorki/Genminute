@@ -13,7 +13,6 @@ import {
   FileText,
   Network,
   MessageCircle,
-  Loader2,
   Calendar,
   Users,
   Clock,
@@ -30,6 +29,7 @@ import {
 } from 'lucide-react';
 import { meetingService, type MeetingDetail } from '../services/meeting';
 import { SPEAKER_COLORS, getSpeakerColorByIndex } from '../config/speakers';
+import { Skeleton } from '../components/Skeleton';
 import SummaryView from '../components/SummaryView';
 import MindmapView from '../components/MindmapView';
 import MinutesView from '../components/MinutesView';
@@ -232,9 +232,17 @@ const NoteDetail = () => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <Loader2 className="w-10 h-10 text-brand-600 animate-spin mb-4" />
-        <p className="text-slate-500">회의록을 불러오는 중...</p>
+      <div className="max-w-6xl mx-auto">
+        <Skeleton className="h-4 w-24 mb-6" />
+        <Skeleton className="h-8 w-1/2 mb-3" />
+        <Skeleton className="h-4 w-80 mb-6" />
+        <Skeleton className="h-24 rounded-xl mb-6" />
+        <div className="flex gap-4 mb-6">
+          <Skeleton className="h-10 w-24" />
+          <Skeleton className="h-10 w-24" />
+          <Skeleton className="h-10 w-24" />
+        </div>
+        <Skeleton className="h-96 rounded-xl" />
       </div>
     );
   }
@@ -340,6 +348,18 @@ const NoteDetail = () => {
                 {player.formatTime(player.duration)}
               </span>
             </div>
+            {meeting.participants.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {meeting.participants.map((participant, i) => (
+                  <span
+                    key={participant}
+                    className={`px-2 py-0.5 text-xs font-medium rounded border ${getSpeakerColorByIndex(i).chip}`}
+                  >
+                    {participant}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {meeting.can_edit && (
@@ -615,11 +635,12 @@ const NoteDetail = () => {
               <SummaryView meetingId={meetingId!} />
             </div>
             <div className="lg:col-span-1">
-              <SpeakerShareChart 
+              <SpeakerShareChart
                 speakerShare={meeting.speaker_share?.reduce((acc, curr) => ({
                   ...acc,
                   [curr.speaker_label]: curr.percentage
-                }), {}) || {}} 
+                }), {}) || {}}
+                participants={meeting.participants}
               />
             </div>
           </div>
