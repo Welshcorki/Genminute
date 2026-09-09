@@ -18,9 +18,9 @@ AI 기반 회의록 자동 생성 시스템
 ## 주요 기능
 
 ### 1. 음성/영상 파일 업로드 및 전사
-- **지원 포맷**: WAV, MP3, M4A, FLAC, MP4, WEBM, OGG (최대 500MB)
+- **지원 포맷**: WAV, MP3, M4A, FLAC, MP4, WEBM (최대 500MB, 클라이언트 측 검증만)
 - **자동 화자 분리**: 
-  - Google Gemini 2.5 Pro를 활용한 화자 구분 (SPEAKER_00, SPEAKER_01...)
+  - Google Gemini를 활용한 화자 구분 (SPEAKER_00, SPEAKER_01...)
   - 또는 로컬 STT (faster-whisper + pyannote.audio) 옵션
 - **언어 자동 감지**: Whisper 모델의 자동 언어 감지 기능
 - **타임스탬프**: 각 발언에 정확한 시간 정보 (초 단위)
@@ -54,7 +54,7 @@ AI 기반 회의록 자동 생성 시스템
 - **Retrieval-Augmented Generation (RAG)** 아키텍처
 - ChromaDB 벡터 데이터베이스를 활용한 의미 기반 검색
 - 회의록 청크 및 주제별 요약에서 관련 정보 추출
-- Gemini 2.5 Flash를 통한 실시간 답변 생성
+- Gemini를 통한 실시간 답변 생성
 - 출처 인용 (회의 정보, 타임스탬프)
 - 전역 챗봇: 모든 회의록 검색
 - 회의별 챗봇: 특정 회의록만 검색
@@ -87,7 +87,7 @@ AI 기반 회의록 자동 생성 시스템
 - **취소 및 결과 보기**: 업로드 취소 및 완료 후 노트로 이동
 
 ### 7. AI 에이전트 (Action Item)
-- **LangGraph 기반**: 지능형 에이전트로 Action Item 자동 추출
+- **LangGraph 기반**: 지능형 에이전트로 Action Item 자동 추출 (`langgraph`는 `requirements.txt`에 없어 별도 설치 필요)
 - **Google Calendar 연동**: OAuth 2.0 기반 일정 자동 등록
 - 회의록에서 Action Item 인식 및 외부 도구 연동
 
@@ -101,14 +101,13 @@ AI 기반 회의록 자동 생성 시스템
 ## 기술 스택
 
 ### Backend
-- **프레임워크**: Flask 3.1.2
+- **프레임워크**: Flask 3.1+
 - **AI/ML**:
-  - Google Gemini 2.5 Pro (STT, 요약, 회의록)
-  - Google Gemini 2.5 Flash (마인드맵, 챗봇)
+  - Google Gemini (STT, 요약, 회의록, 마인드맵, 챗봇 — `GEMINI_MODEL` 환경변수, 기본 `gemini-3-flash`)
   - Faster-Whisper 1.2.0 (로컬 STT 옵션)
-  - Pyannote.Audio 3.1.1 (화자 분리)
+  - Pyannote.Audio 3.1+ (화자 분리)
 - **벡터 데이터베이스**: ChromaDB + LangChain
-- **에이전트 프레임워크**: LangGraph
+- **에이전트 프레임워크**: LangGraph (`requirements.txt` 미포함 — 별도 설치 필요)
 - **데이터베이스**: Supabase (PostgreSQL, 관계형 데이터 + Auth), ChromaDB (벡터 임베딩)
   - `DB_TYPE` 환경변수로 `supabase`(기본) / `sqlite` 전환 가능 (Repository 패턴)
 - **인증**: Supabase Auth (Access Token 검증)
@@ -135,7 +134,6 @@ AI 기반 회의록 자동 생성 시스템
 genminute/
 ├── app.py                          # Flask 애플리케이션 진입점
 ├── config.py                       # 중앙 집중식 설정 관리
-├── init_db.py                      # 데이터베이스 초기화 스크립트
 │
 ├── routes/                         # HTTP 라우트 핸들러 (Blueprint)
 │   ├── __init__.py
@@ -153,11 +151,11 @@ genminute/
 │   ├── chat_service.py             # 챗봇 서비스
 │   ├── analysis_service.py         # 화자 비중 분석
 │   ├── user_service.py              # 사용자 서비스
-│   ├── firebase_service.py         # Firebase 서비스
 │   ├── agent_service.py            # AI 에이전트 서비스
 │   └── diarization.py              # 로컬 STT 및 화자 분리
 │
 ├── database/                       # 데이터베이스 레이어
+│   ├── repositories/               # Repository 구현체 (SQLite/Supabase) 및 테이블 초기화
 │   ├── sqlite_manager.py           # SQLite 데이터베이스 작업
 │   └── vector_manager.py           # ChromaDB 벡터 데이터베이스
 │
@@ -200,7 +198,7 @@ genminute/
 │   │   ├── hooks/                  # 커스텀 훅
 │   │   │   └── useRecorder.ts      # 녹음/녹화 훅
 │   │   └── config/                  # 설정
-│   │       └── firebase.ts         # Firebase 클라이언트 설정
+│   │       └── supabase.ts         # Supabase 클라이언트 설정
 │   ├── package.json                # Node.js 종속성
 │   └── vite.config.ts              # Vite 빌드 설정
 │
@@ -219,7 +217,7 @@ genminute/
 │
 ├── database/                       # 데이터베이스 저장소
 │   ├── minute_ai.db                # SQLite 데이터베이스
-│   └── chroma_db/                  # ChromaDB 영구 저장소
+│   └── vector_db/                  # ChromaDB 영구 저장소
 │
 ├── uploads/                        # 업로드된 오디오/비디오 파일
 ├── requirements.txt                # Python 패키지 종속성
@@ -333,12 +331,11 @@ Content: "### 주제\n* 포인트 1\n* 포인트 2..." 형식
 | 엔드포인트 | 메서드 | 인증 | 설명 |
 |----------|--------|------|------|
 | `/login` | GET | 불필요 | 로그인 페이지 표시 |
-| `/api/login` | POST | 불필요 | Firebase ID 토큰 검증 및 세션 생성 |
+| `/api/login` | POST | 불필요 | Supabase Access Token 검증 및 세션 생성 |
 | `/api/logout` | POST | 불필요 | 세션 종료 |
 | `/api/me` | GET | 필수 | 현재 사용자 정보 조회 |
-| `/api/firebase-config` | GET | 불필요 | Firebase 클라이언트 설정 조회 |
 
-### 회의록 관리 (meetings.py)
+### 회의록 관리 (meetings.py, meetings_share.py, meetings_upload.py)
 
 | 엔드포인트 | 메서드 | 인증 | 설명 |
 |----------|--------|------|------|
@@ -347,8 +344,8 @@ Content: "### 주제\n* 포인트 1\n* 포인트 2..." 형식
 | `/shared-notes` | GET | 필수 | 공유받은 회의록 목록 |
 | `/view/<meeting_id>` | GET | 필수 | 회의록 뷰어 페이지 |
 | `/api/meeting/<meeting_id>` | GET | 필수 | 회의록 데이터 조회 |
-| `/api/notes_json` | GET | 필수 | 회의록 목록 조회 (JSON, 페이지네이션 지원) |
-| `/upload` | POST | 필수 | 오디오/비디오 파일 업로드 (SSE 스트리밍) |
+| `/notes_json` | GET | 필수 | 회의록 목록 조회 (JSON, 페이지네이션 지원) |
+| `/upload` | POST | 필수 | 오디오/비디오 파일 업로드 (SSE 스트리밍, `meetings_upload.py`) |
 | `/api/delete_meeting/<meeting_id>` | POST | 필수 | 회의록 삭제 (소유자 전용) |
 | `/api/update_title/<meeting_id>` | POST | 필수 | 제목 수정 (소유자 전용) |
 | `/api/update_date/<meeting_id>` | POST | 필수 | 날짜 수정 (소유자 전용) |
@@ -359,7 +356,7 @@ Content: "### 주제\n* 포인트 1\n* 포인트 2..." 형식
 | `/api/mindmap/<meeting_id>` | GET | 필수 | 마인드맵 데이터 조회 |
 | `/api/stats` | GET | 필수 | 사용자 통계 조회 (이번 달 노트 수, 총 녹음 시간 등) |
 
-**쿼리 파라미터 (`/api/notes_json`):**
+**쿼리 파라미터 (`/notes_json`):**
 - `page`: 페이지 번호 (기본값: 1)
 - `per_page`: 페이지당 항목 수 (기본값: 20)
 - `search`: 검색어 (제목, 요약 내용)
@@ -385,8 +382,8 @@ Content: "### 주제\n* 포인트 1\n* 포인트 2..." 형식
 
 | 엔드포인트 | 메서드 | 인증 | 설명 |
 |----------|--------|------|------|
-| `/api/google-auth/start` | GET | 필수 | Google Calendar OAuth 시작 |
-| `/api/google-auth/oauth2callback` | GET | 불필요 | OAuth 콜백 처리 |
+| `/google/calendar/authorize` | GET | 필수 | Google Calendar OAuth 시작 |
+| `/oauth2callback` | GET | 불필요 | OAuth 콜백 처리 |
 
 **요청 예시:**
 ```json
@@ -484,7 +481,7 @@ npm run build
 python app.py
 ```
 
-브라우저에서 `http://localhost:5050` 접속
+브라우저에서 `http://localhost:5000` 접속
 
 **참고:** 
 - Supabase(`DB_TYPE=supabase`) 사용 시 테이블 스키마는 [docs/database/supabase_schema.sql](docs/database/supabase_schema.sql)을 Supabase SQL Editor에서 실행하여 준비합니다.
@@ -535,7 +532,7 @@ python app.py
    ↓
 4. 컨텍스트 포맷팅 (메타데이터 포함)
    ↓
-5. Gemini 2.5 Flash로 답변 생성
+5. Gemini로 답변 생성
    → 컨텍스트 기반만 사용
    ↓
 6. 출처 정보 추출
@@ -565,8 +562,8 @@ def _create_smart_chunks(segments, max_chunk_size=1000, time_gap_threshold=60):
 ```python
 def process_query(query, meeting_id, accessible_meeting_ids):
     # 1. 벡터 검색 (청크 + 요약)
-    chunks = search_meeting_chunks(query, accessible_meeting_ids, k=3)
-    subtopics = search_meeting_subtopic(query, accessible_meeting_ids, k=3)
+    chunks = vdb_manager.search("chunks", query, k=3, filter_criteria=...)
+    subtopics = vdb_manager.search("subtopic", query, k=3, filter_criteria=...)
 
     # 2. 컨텍스트 생성
     context = format_context(chunks + subtopics)
@@ -585,7 +582,6 @@ def process_query(query, meeting_id, accessible_meeting_ids):
 ## 보안 고려사항
 
 ### 인증
-- Firebase ID 토큰 검증 (모든 요청)
 - Flask 세션 기반 상태 관리
 - 256비트 랜덤 시크릿 키
 
@@ -595,9 +591,8 @@ def process_query(query, meeting_id, accessible_meeting_ids):
 - 쿼리 필터링 (accessible_meeting_ids)
 
 ### 입력 검증
-- 파일 타입 화이트리스트 (wav, mp3, m4a, flac, mp4, webm, ogg)
-- 파일 크기 제한 (500MB)
-- 제목 길이 검증 (100자)
+- 파일 타입 화이트리스트 (wav, mp3, m4a, flac, mp4, webm)
+- 파일 크기 제한 (500MB, 클라이언트 측 검증만)
 - 날짜 형식 검증
 - 이메일 형식 검증 (공유 기능)
 
@@ -609,7 +604,6 @@ def process_query(query, meeting_id, accessible_meeting_ids):
 - `werkzeug.secure_filename()` 사용
 - UUID 접두사로 이름 충돌 방지
 - 별도 업로드 디렉토리
-- MIME 타입 검증
 
 ---
 
@@ -626,7 +620,6 @@ def process_query(query, meeting_id, accessible_meeting_ids):
 - 필터링된 검색으로 연산 감소
 
 ### 캐싱
-- Firebase SDK 초기화 전역 캐싱
 - 싱글톤 매니저 (STT, Chat, Vector DB)
 
 ### 비동기 처리
@@ -707,7 +700,7 @@ python app.py
 ### 3. ChromaDB 오류
 ```bash
 # ChromaDB 데이터베이스 초기화
-rm -rf database/chroma_db
+rm -rf database/vector_db
 python app.py  # 자동으로 재생성됨
 ```
 
@@ -786,7 +779,6 @@ python -c "import pyannote.audio; print(pyannote.audio.__version__)"
 - [LangChain](https://github.com/langchain-ai/langchain)
 - [ChromaDB](https://github.com/chroma-core/chroma)
 - [Flask](https://flask.palletsprojects.com/)
-- [Firebase](https://firebase.google.com/)
 - [React](https://react.dev/)
 - [Vite](https://vitejs.dev/)
 - [WaveSurfer.js](https://wavesurfer-js.org/)
