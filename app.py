@@ -20,7 +20,10 @@ from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
 from config import config
-from services.diarization import diarization_service
+# [검증 중 2026-11-16] 이 import는 app.py에서 사용되지 않아 주석 처리함.
+# 로컬 STT는 services/stt_service.py가 필요한 시점에 직접 불러온다.
+# 로컬 STT 업로드가 정상 동작하는 것을 확인한 뒤 이 줄을 삭제할 예정.
+# from services.diarization import diarization_service
 from database import get_db_manager
 from database.vector_manager import vdb_manager
 from routes import register_blueprints
