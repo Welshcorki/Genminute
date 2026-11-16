@@ -140,6 +140,46 @@ npm run dev
 
 ---
 
+## 로컬 STT 환경 버전 현황 (2026-11-16 기준, `genminute_stt` conda 환경)
+
+프로젝트 작업 이후 시간이 지나며 설치된 패키지가 업데이트되어, `requirements.txt`와 실제 환경 사이에 차이가 생겼습니다.
+아래는 `pip list` / `pip check` / import 확인으로 조사한 현재 상태입니다.
+
+| 패키지 | 설치 버전 | `requirements.txt` | 상태 |
+|---|---|---|---|
+| torch / torchaudio | 2.5.1 | `>=2.0,<3.0` | 일치 |
+| faster-whisper | 1.2.0 | `==1.2.0` | 일치 |
+| pyannote.audio | 3.3.1 | `>=3.1,<4.0` | 일치 |
+| huggingface_hub | **1.7.1** | `<0.20` | **불일치** — 아래 1번 |
+| transformers | **5.3.0** | (선택 패키지) | **불일치** — 아래 2번 |
+| optimum-intel | 1.26.1 | (선택 패키지) | transformers `>=4.45,<4.56` 요구 |
+| openvino | 2025.4.0 | (선택 패키지) | — |
+| langgraph | 1.2.22 | `>=1.0,<2.0` | 일치 (2026-11-16 업데이트) |
+| langchain / langchain-core | 1.5.0 / 1.8.1 | `>=0.2.0` | 일치 (2026-11-16 업데이트) |
+| langchain-classic | 1.0.8 | `>=1.0,<2.0` | 일치 (2026-11-16 업데이트) |
+
+### 1. huggingface_hub 1.x ↔ pyannote.audio 3.x
+
+- `services/diarization.py`는 `huggingface_hub.login`으로 인증한 뒤 `pyannote.audio`의 `Pipeline.from_pretrained`를 호출합니다.
+- pyannote.audio 3.3.1은 내부에서 `hf_hub_download(use_auth_token=...)`를 호출하는데, 이 인자는 huggingface_hub 1.0에서 제거되었습니다.
+- 따라서 현재 환경(1.7.1)에서는 **화자 분리 모델 로드가 실패할 가능성이 높습니다** (코드 확인 기준, 실제 실행은 미검증).
+- 해결 방향(택1, 미적용): ① `pip install "huggingface_hub<1.0"`로 낮춤(다른 패키지 요구 버전 확인 필요) ② pyannote.audio 4.x로 올리고 `requirements.txt` 상한 조정(코드 변경 가능성 있음).
+
+### 2. transformers 5.x ↔ optimum-intel 1.26.x (Intel OpenVINO 가속)
+
+- optimum-intel 1.26.1은 transformers `>=4.45,<4.56`만 지원합니다. 설치된 5.3.0에서는 `import optimum.intel.openvino`가 `No module named 'transformers.onnx'`로 실패합니다.
+- `STT_BACKEND=auto`일 때 import 실패는 자동으로 faster-whisper 백엔드로 폴백되므로 앱은 동작합니다(현재 감지 결과: `faster_whisper`, CPU).
+- 즉 **현재 환경에서는 OpenVINO 가속이 사용되지 않습니다.** 다시 쓰려면 transformers를 4.55.x로 낮추거나 optimum-intel을 transformers 5.x 지원 버전으로 올려야 합니다(미검증).
+
+### 확인 명령
+
+```bash
+pip check                                   # 버전 충돌 목록
+pip list | findstr /i "huggingface transformers optimum pyannote torch"
+```
+
+---
+
 ## 참고 문서
 
 - [배포 이슈 분석](deployment_issues.md)

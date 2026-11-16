@@ -740,11 +740,18 @@ rm -rf node_modules/.vite
 # Hugging Face 토큰 확인
 echo $HF_TOKEN
 
-# PyTorch 버전 확인 (2.3.1 권장)
+# PyTorch 버전 확인 (검증 환경: 2.5.1)
 python -c "import torch; print(torch.__version__)"
 
-# pyannote.audio 버전 확인 (3.1.1 권장)
+# pyannote.audio 버전 확인 (검증 환경: 3.3.1, 4.0 미만)
 python -c "import pyannote.audio; print(pyannote.audio.__version__)"
+
+# huggingface_hub 버전 확인 (pyannote.audio 3.x는 1.0 미만 필요)
+python -c "import huggingface_hub; print(huggingface_hub.__version__)"
+
+# 패키지 간 버전 충돌 확인
+pip check
+# 상세: docs/guides/setup_guide.md '로컬 STT 환경 버전 현황'
 ```
 
 ---

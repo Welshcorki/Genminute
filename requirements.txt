@@ -1,12 +1,15 @@
 # =========================================
 # GenMinute 통합 의존성 목록
-# 최종 업데이트: 2026-02-26
+# 최종 업데이트: 2026-11-16
 # =========================================
 
 # -----------------------------------------
 # 1. Core Stability Layer
 # -----------------------------------------
 numpy<2.0
+# pyannote.audio 3.x는 hf_hub_download(use_auth_token=...)를 호출하는데, 이 인자는
+# huggingface_hub 1.0에서 제거됨. 1.x가 설치되면 화자 분리 모델 로드가 실패하므로 상한을 유지한다.
+# (services/diarization.py가 huggingface_hub.login을 직접 사용)
 huggingface_hub<0.20
 
 torch>=2.0,<3.0
@@ -55,7 +58,9 @@ langgraph>=1.0,<2.0          # Action Item 에이전트 (services/agent_service.
 faster-whisper==1.2.0
 pyannote.audio>=3.1,<4.0
 # 선택: Intel GPU/NPU 가속(STT_BACKEND=openvino)을 쓸 때만 별도 설치
-#   pip install openvino optimum[openvino] transformers
+#   pip install openvino "optimum-intel[openvino]" "transformers>=4.45,<4.56"
+#   ⚠️ optimum-intel 1.26.x는 transformers 4.56 미만만 지원 (5.x에서는 import 실패 → faster-whisper로 자동 폴백)
+#   버전 현황은 docs/guides/setup_guide.md '로컬 STT 환경 버전 현황' 참조
 
 # -----------------------------------------
 # 6. Calendar & External Tools
