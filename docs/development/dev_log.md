@@ -1977,3 +1977,46 @@ import type { UploadProgress } from '../services/upload';
 - 미커버: 업로드 SSE 파이프라인(`/upload`), 회의록 생성(`/api/generate_minutes`), 챗봇(`/api/chat`), Action Item 추출 — LLM/STT 의존이 커서 서비스 통합 단계에서 mock 경계를 정리하며 추가 예정.
 - `firebase-adminsdk.json`은 반드시 이 파일명으로 둘 것(.gitignore가 이 이름만 제외).
 - 로컬 접속은 `localhost:5000` 사용(Firebase 승인 도메인·Calendar OAuth 리다이렉트가 `localhost` 기준).
+
+---
+
+## 2026년 11월 16일 - 의존성 정리, 상수 연결, 죽은 코드 삭제
+
+### 1. 목표 (무엇을·왜)
+- 코드가 쓰는데 `requirements.txt`에 없던 패키지를 넣고 최신 안정 버전으로 맞춘다.
+- `config.py`에 정의만 되어 있고 연결되지 않은 상수를 실제 코드에 연결한다.
+- 어디서도 참조하지 않는 코드를 재검증 후 삭제한다.
+
+### 2. 주요 변경 사항 (어떻게)
+- **의존성**: `langgraph`, `langchain-classic`을 `requirements.txt`에 추가(`>=1.0,<2.0`). `genminute_stt` 환경을
+  langgraph 1.0.4→1.2.22, langchain-classic 1.0.0→1.0.8로 업데이트(동반: langchain-core 1.1.0→1.8.1, langgraph-checkpoint 3.0.1→4.3.2,
+  langsmith 0.4.53→0.14.17, langchain-text-splitters 1.0.0→1.1.3). `langchain` 1.1.0이 `langgraph<1.1`을 요구해 충돌 → `langchain` 1.5.0으로 올려 해소.
+- **상수 연결**(값 동일, 동작 변화 없음): `CHUNK_SIZE`, `CHUNK_OVERLAP`, `TIME_GAP_THRESHOLD_SECONDS` → `database/vector_manager.py`,
+  `SEARCH_RESULTS_PER_COLLECTION`, `SEARCH_MULTIPLIER` → `services/chat_service.py`.
+- **삭제**(약 4,000줄): 도달 불가 템플릿 6개와 전용 JS 2개, `utils/document_converter.py`, `scripts/refactor_db.py`,
+  `tools/generate_roadmap_mindmap.py`, `optional_login`, 프론트 `services/auth.ts`·`react.svg`·`vite.svg`·`test-ui.html`, `app.py` 미사용 import.
+- **주석 처리(검증 중)**: `app.py`의 `diarization_service` import.
+- **문서**: `docs/guides/setup_guide.md`에 '로컬 STT 환경 버전 현황' 추가.
+
+### 3. 주요 결정 및 이유
+- **삭제 보류 2건 — 죽은 코드가 아니라 연결이 끊긴 기능으로 판단**
+  - `upload_service.convert_webm_to_compatible_format`: 실시간 녹음 구현 커밋(`14748d8`)에서 업로드 라우트가 호출했으나,
+    Repository 리팩토링 복구 커밋(`a81a544`)에서 호출부가 사라짐. 브라우저 녹음(WebM)의 재생 호환성 변환 기능.
+  - `STTManager.parse_script`: 화자 표기가 있는 스크립트 파서. 관리자 `/upload_script`는 대신 "줄 단위 + 화자 3명 순환"의 임시 파싱을 사용.
+    관리자 페이지 React 재구현 때 연결 여부 결정.
+- **`app.py`의 DI 서비스 인스턴스 3개는 유지**: 현재 미사용이지만 "DI는 app.py에서 조립"이 목표 구조이므로 서비스 통합 단계에서 연결 예정.
+- **환경 업그레이드 범위 최소화**: LangChain 계열 전체를 최신으로 올리면 chromadb(1.3.5→1.5.9), langchain-google-genai(3.x→4.x) 등
+  저장 형식·주 버전 변경이 따라와 이번에는 충돌 해소에 필요한 `langchain`만 올림.
+
+### 4. 검증
+- 전체 79건 통과(상수 연결 테스트 6건 추가 — 연결 전 코드에서는 4건 실패 확인). 프론트 빌드 통과. 앱 부팅 확인.
+- 업그레이드 후 `pip check`: LangChain 계열 충돌 없음(남은 2건은 기존 OpenVINO 관련).
+- 에이전트 그래프(초기화·도구 바인딩·컴파일·실행·도구 호출)와 청킹/폴백 스플리터를 LLM mock으로 확인. 업그레이드 전 패키지 목록은 `pip freeze`로 백업.
+
+### 5. 알려진 이슈 / 남은 일
+- **로컬 STT 화자 분리가 현재 환경에서 실패할 가능성 높음**: huggingface_hub 1.7.1에는 pyannote.audio 3.3.1이 넘기는 `use_auth_token` 인자가 없음(코드 확인, 실행 미검증).
+- **OpenVINO 가속 미동작**: transformers 5.3.0에서 `optimum.intel` import 실패 → faster-whisper(CPU)로 자동 폴백 중.
+- 실제 LLM 호출(Gemini 요약·챗봇·에이전트)은 업그레이드 후 미검증 — 실제 업로드 1회로 확인 필요.
+- 에이전트 `messages` 상태가 실행마다 중복 누적되는 것으로 보임(리듀서가 더하는데 노드도 전체 목록을 반환). AI 파이프라인이라 미수정.
+- 관리자 `/upload_script`의 세그먼트 키(`speaker_label`/`segment`)가 저장 함수가 기대하는 키(`speaker`/`text`)와 달라 동작하지 않을 가능성 — 관리자 재구현 때 확인.
+- 커밋 `383e96f`의 메시지에는 데코레이터·app.py 정리가 적혀 있으나 실제 내용은 파일 3개 삭제뿐이며, 해당 변경은 `27063bb`에 있음.
