@@ -105,11 +105,11 @@ class Config:
     # ==================== 청킹(Chunking) 설정 ====================
     CHUNK_SIZE: int = 1000  # 텍스트 청크 최대 크기
     CHUNK_OVERLAP: int = 200  # 청크 중복 크기
-    TIME_GAP_THRESHOLD_SECONDS: int = 60  # 화자 변경 인식 기준 (초)
+    TIME_GAP_THRESHOLD_SECONDS: int = 60  # 이 시간(초) 이상 발화가 끊기면 청크를 나눔
 
     # ==================== 검색 설정 ====================
     SEARCH_RESULTS_PER_COLLECTION: int = 3  # 컬렉션당 검색 결과 수
-    SEARCH_MULTIPLIER: int = 10  # 검색 결과 배수
+    SEARCH_MULTIPLIER: int = 10  # 접근 가능한 노트 수 × 이 값만큼 후보를 검색한 뒤 필터링
 
     # ==================== 관리자 설정 ====================
     ADMIN_EMAILS: list = os.getenv('ADMIN_EMAILS', '').split(',') if os.getenv('ADMIN_EMAILS') else []

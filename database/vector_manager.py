@@ -141,7 +141,11 @@ class VectorDBManager:
 
         try:
             # 1. 스마트 청킹: 화자 변경과 시간 간격을 고려
-            chunks = self._create_smart_chunks(segments, max_chunk_size=1000, time_gap_threshold=60)
+            chunks = self._create_smart_chunks(
+                segments,
+                max_chunk_size=config.CHUNK_SIZE,
+                time_gap_threshold=config.TIME_GAP_THRESHOLD_SECONDS,
+            )
 
             logger.info(f"📦 스마트 청킹으로 {len(chunks)}개의 청크 생성 완료")
 
@@ -201,8 +205,8 @@ class VectorDBManager:
 
             # RecursiveCharacterTextSplitter로 청킹
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200,
+                chunk_size=config.CHUNK_SIZE,
+                chunk_overlap=config.CHUNK_OVERLAP,
                 separators=["\n[Speaker", "\n\n", "\n", " ", ""]
             )
 
@@ -238,7 +242,12 @@ class VectorDBManager:
 
             logger.info(f"✅ {len(split_chunks)}개의 청크를 meeting_chunks DB에 저장 완료 (폴백 모드)")
 
-    def _create_smart_chunks(self, segments, max_chunk_size=1000, time_gap_threshold=60):
+    def _create_smart_chunks(
+        self,
+        segments,
+        max_chunk_size=config.CHUNK_SIZE,
+        time_gap_threshold=config.TIME_GAP_THRESHOLD_SECONDS,
+    ):
         """
         화자 변경, 시간 간격을 고려한 스마트 청킹
 

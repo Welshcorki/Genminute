@@ -97,15 +97,16 @@ class ChatManager:
                 k = 20
                 filter_ids = [meeting_id]
             elif accessible_meeting_ids:
-                k = len(accessible_meeting_ids) * 10
+                k = len(accessible_meeting_ids) * config.SEARCH_MULTIPLIER
                 filter_ids = accessible_meeting_ids
                 logger.info(f"🔍 {len(accessible_meeting_ids)}개 노트에서 검색 중...")
             else:
                 k = 10
                 filter_ids = None
 
-            chunks_results = self._search_collection('chunks', query, k, filter_ids)[:3]
-            subtopic_results = self._search_collection('subtopic', query, k, filter_ids)[:3]
+            top_n = config.SEARCH_RESULTS_PER_COLLECTION
+            chunks_results = self._search_collection('chunks', query, k, filter_ids)[:top_n]
+            subtopic_results = self._search_collection('subtopic', query, k, filter_ids)[:top_n]
 
             logger.info(f"✅ 검색 완료: chunks={len(chunks_results)}개, subtopic={len(subtopic_results)}개")
 
