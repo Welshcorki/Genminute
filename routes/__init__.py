@@ -16,7 +16,6 @@ from .meetings_action_items import meetings_action_items_bp
 from .chat import chat_bp
 from .summary import summary_bp
 from .admin import admin_bp
-from .live_record import live_bp
 from .google_auth import google_auth_bp
 from .health import health_bp
 
@@ -36,6 +35,5 @@ def register_blueprints(app):
     app.register_blueprint(chat_bp)
     app.register_blueprint(summary_bp)
     app.register_blueprint(admin_bp)
-    app.register_blueprint(live_bp)
     app.register_blueprint(google_auth_bp)
     app.register_blueprint(health_bp)

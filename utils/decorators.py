@@ -6,10 +6,13 @@ Flask 라우트 데코레이터
 """
 
 from functools import wraps
-from flask import session, request, jsonify, redirect, url_for, flash
+from flask import session, request, jsonify, redirect
 import logging
 
 logger = logging.getLogger(__name__)
+
+# 로그인 페이지 경로 (React SPA 라우트 — frontend/src/App.tsx의 /login)
+LOGIN_PATH: str = '/login'
 
 
 def api_error_handler(f):
@@ -50,10 +53,10 @@ def login_required(f):
         if 'user_id' not in session:
             # API 요청인 경우 JSON 응답
             if request.path.startswith('/api/'):
-                return jsonify({'error': '로그인이 필요합니다.', 'redirect': '/login'}), 401
+                return jsonify({'error': '로그인이 필요합니다.', 'redirect': LOGIN_PATH}), 401
 
             # HTML 페이지 요청인 경우 로그인 페이지로 리다이렉트
-            return redirect(url_for('auth.login_page'))
+            return redirect(LOGIN_PATH)
 
         return f(*args, **kwargs)
 
@@ -76,12 +79,14 @@ def admin_required(f):
         if 'user_id' not in session:
             # API 요청인 경우 JSON 응답
             if request.path.startswith('/api/'):
-                return jsonify({'error': '로그인이 필요합니다.', 'redirect': '/login'}), 401
+                return jsonify({'error': '로그인이 필요합니다.', 'redirect': LOGIN_PATH}), 401
 
             # HTML 페이지 요청인 경우 로그인 페이지로 리다이렉트
-            return redirect(url_for('auth.login_page'))
+            return redirect(LOGIN_PATH)
 
-        # Admin 권한 체크
+        # Admin 권한 체크 (순환 import 방지를 위해 지연 import)
+        from services.user_service import is_admin
+
         user_id = session['user_id']
         if not is_admin(user_id):
             # API 요청인 경우 JSON 응답

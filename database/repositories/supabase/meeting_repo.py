@@ -63,13 +63,13 @@ class SupabaseMeetingRepository(MeetingRepositoryInterface):
     def update_meeting_title(self, meeting_id: str, new_title: str) -> Dict:
         self._client.table('meeting_dialogues').update({'title': new_title}).eq('meeting_id', meeting_id).execute()
         # ChromaDB update
-        vdb_manager.update_metadata(meeting_id, {'title': new_title})
+        vdb_manager.update_metadata_title(meeting_id, new_title)
         return {"success": True, "message": "제목이 업데이트되었습니다."}
 
     def update_meeting_date(self, meeting_id: str, new_date: str) -> Dict:
         self._client.table('meeting_dialogues').update({'meeting_date': new_date}).eq('meeting_id', meeting_id).execute()
         # ChromaDB update
-        vdb_manager.update_metadata(meeting_id, {'meeting_date': new_date})
+        vdb_manager.update_metadata_date(meeting_id, new_date)
         return {"success": True, "message": "날짜가 업데이트되었습니다."}
 
     def delete_meeting_data(self, meeting_id: Optional[str] = None, audio_file: Optional[str] = None, title: Optional[str] = None) -> int:
@@ -87,8 +87,8 @@ class SupabaseMeetingRepository(MeetingRepositoryInterface):
         self._client.table('meeting_action_items').delete().eq('meeting_id', meeting_id).execute()
         self._client.table('meeting_shares').delete().eq('meeting_id', meeting_id).execute()
         
-        # ChromaDB
-        vdb_manager.delete_from_collection('all', meeting_id=meeting_id)
+        # ChromaDB/오디오 파일 삭제는 호출자(vdb_manager._delete_all_meeting_data)가 수행한다.
+        # 여기서 delete_from_collection('all')을 호출하면 서로를 다시 불러 무한 재귀가 된다.
         return {"success": True, "message": "회의가 삭제되었습니다."}
 
     def get_user_stats(self, user_id: int, is_admin: bool) -> Dict:

@@ -1912,3 +1912,39 @@ import type { UploadProgress } from '../services/upload';
 - 로컬 `minute_ai.db`는 2026-04 시점 데이터. Supabase 시절 회의는 복구 불가이며, ChromaDB에 해당 회의의 벡터가 남아 있을 수 있음(검색에는 접근 권한 필터로 노출되지 않음).
 - 레거시 템플릿 `templates/login.html`은 Firebase 설정을 받지 못함 — 다음 단계(레거시 페이지 라우트 제거)에서 해소 예정.
 - `gunicorn_config.py` 기본 워커 4개(`GUNICORN_WORKERS`) + SQLite 조합은 동시 쓰기 시 잠금 대기가 생길 수 있음 — 프로덕션 배포 전 워커 수 검토 필요.
+
+---
+
+## 2026년 11월 16일 - 버그 수정 5건 (리팩토링 전 선행)
+
+### 1. 목표 (무엇을·왜)
+- 리팩토링 전 조사에서 발견된 버그를 **구조 이동 없이 최소 수정**으로 먼저 해소하고, 각 수정에 회귀 테스트를 붙인다.
+
+### 2. 수정 내용 (어떻게)
+| # | 증상 | 원인 | 수정 |
+|---|---|---|---|
+| 1 | Flask로 서빙하면 `/`, `/login`, `/notes`, `/shared-notes`, `/record`에서 React가 아닌 옛 Jinja 페이지가 뜸 | Blueprint의 레거시 페이지 라우트가 SPA catch-all보다 먼저 매칭 | 레거시 페이지 라우트 6개 제거(`routes/live_record.py` 삭제 포함). `login_required`는 `/login`(SPA)으로 리다이렉트 |
+| 2 | 관리자 라우트 전체가 500 | `admin_required`가 import하지 않은 `is_admin` 호출(NameError) | 데코레이터 내부에서 지연 import |
+| 3 | 수동 요약 재생성 시 마인드맵이 갱신되지 않음 | `/api/summarize`와 `upload_service.generate_summary`가 따로 구현되어 전자에 마인드맵 로직 없음 | 라우트가 `generate_summary`를 호출하도록 단일화 |
+| 4 | (Supabase) 제목/날짜 수정 실패 | 존재하지 않는 `vdb_manager.update_metadata` 호출 | `update_metadata_title`/`update_metadata_date`로 교체 |
+| 5 | (Supabase) 회의 삭제 시 무한 재귀 | repo ↔ `vdb_manager`가 서로를 호출 | repo의 `delete_from_collection('all')` 호출 제거 |
+
+### 3. 변경 파일
+`routes/meetings.py`, `routes/auth.py`, `routes/__init__.py`, `routes/live_record.py`(삭제), `routes/summary.py`, `utils/decorators.py`,
+`services/upload_service.py`, `config.py`(`MIN_SUMMARY_TEXT_LENGTH`), `templates/layout.html`, `database/repositories/supabase/meeting_repo.py`,
+`tests/test_app_routes.py`(신규), `tests/test_supabase_meeting_repo.py`(신규)
+
+### 4. 주요 결정 및 이유
+- **관리자 페이지(레거시 템플릿)는 유지**: React 재구현 전까지 사용. `layout.html` 내비게이션만 SPA 경로(`/`, `/notes` 등)로 직접 연결.
+- **더 이상 도달 불가한 템플릿**(`index/notes/shared-notes/viewer/login/live/recorder.html`)과 전용 JS는 이번에 삭제하지 않음 → 죽은 코드 삭제 단계에서 처리.
+- **동작 변경**: 수동 요약도 전사 텍스트가 50자 미만이면 400을 반환하고, 요약할 때마다 마인드맵 LLM 호출이 1회 추가됨.
+- 삭제 오케스트레이션을 `MeetingService`로 옮기는 구조 개선은 리팩토링 단계로 미룸.
+
+### 5. 검증
+- 신규 테스트 15건(`test_app_routes` 11, `test_supabase_meeting_repo` 4). 수정 전 코드에서 실패하고 수정 후 통과함을 확인.
+- 전체 50건 통과(`genminute_stt` 환경). `test_app_routes`는 임시 SQLite DB로 실제 앱을 부팅하며 실 DB를 건드리지 않음.
+
+### 6. 알려진 이슈 / 남은 일
+- Supabase 수정 2건은 mock 테스트까지만 검증(실제 Supabase 프로젝트 없음).
+- `/notes_json`, `/upload`처럼 `/api/`로 시작하지 않는 JSON 엔드포인트는 비로그인 시 401 대신 `/login`으로 리다이렉트됨(기존 동작, 미수정). 프론트의 `ENABLE_PUBLIC_ACCESS=true`와 맞물려 비로그인 목록 화면에서 HTML을 받게 됨 → 후속 수정 후보.
+- `test_app_routes`의 요약 테스트는 수정 전 코드에서 실제 Gemini 호출을 시도했음(라우트가 서비스 mock을 우회했기 때문) — 단일화로 해소.

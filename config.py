@@ -82,6 +82,9 @@ class Config:
     MAX_FILE_SIZE_MB: int = 500
     UPLOAD_TIMEOUT_SECONDS: int = 1200  # 20분
 
+    # ==================== 요약 설정 ====================
+    MIN_SUMMARY_TEXT_LENGTH: int = 50  # 이보다 짧은 전사 텍스트는 요약을 생략
+
     # ==================== STT 엔진 설정 ====================
     # "local" : faster-whisper + pyannote (GPU 권장, 무료)
     # "gemini": Gemini API STT + 화자분리 (GPU 불필요, API 비용 발생)

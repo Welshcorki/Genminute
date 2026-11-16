@@ -50,6 +50,11 @@ def convert_agent_items_to_db_format(processed_items: list) -> list:
     return db_items
 
 
+# generate_summary가 요약을 생략할 때 반환하는 사유 코드
+SUMMARY_NO_SEGMENTS: str = 'no_segments'
+SUMMARY_TOO_SHORT: str = 'too_short'
+
+
 class UploadService:
     """파일 업로드 처리 서비스"""
 
@@ -281,21 +286,32 @@ class UploadService:
             logger.warning(f"⚠️ Action Item 추출 에이전트 호출 중 오류 발생: {e}", exc_info=True)
 
     def generate_summary(self, meeting_id: str) -> dict:
-        """문단 요약 생성"""
+        """
+        문단 요약 생성 + 마인드맵 키워드 재생성
+
+        업로드 파이프라인과 수동 요약(/api/summarize)이 공유하는 단일 구현입니다.
+
+        Returns:
+            성공: {'success': True, 'summary': str}
+            생략: {'success': False, 'code': SUMMARY_NO_SEGMENTS | SUMMARY_TOO_SHORT, 'message': str}
+
+        Raises:
+            ValueError: LLM이 요약을 생성하지 못한 경우
+        """
         logger.info(f"🤖 문단 요약 자동 생성 시작 (meeting_id: {meeting_id})")
 
         all_segments = self.db.get_segments_by_meeting_id(meeting_id)
 
         if not all_segments:
             logger.warning(f"⚠️ 세그먼트가 없어 요약을 생략합니다. (meeting_id: {meeting_id})")
-            return {'success': False, 'message': 'No segments found'}
+            return {'success': False, 'code': SUMMARY_NO_SEGMENTS, 'message': 'No segments found'}
 
         first_segment = all_segments[0]
         transcript_text = " ".join([row['segment'] for row in all_segments])
 
-        if len(transcript_text) < 50:
+        if len(transcript_text) < config.MIN_SUMMARY_TEXT_LENGTH:
             logger.warning(f"⚠️ 텍스트가 너무 짧아 요약을 생략합니다. (길이: {len(transcript_text)})")
-            return {'success': False, 'message': 'Text too short to summarize'}
+            return {'success': False, 'code': SUMMARY_TOO_SHORT, 'message': 'Text too short to summarize'}
 
         summary_content = self.stt_manager.subtopic_generate(first_segment['title'], transcript_text)
 

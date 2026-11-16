@@ -36,10 +36,10 @@
             </div>
             <ul class="nav-menu">
                 <li class="nav-header">Meeting</li>
-                <li class="nav-item" data-page="index"><a href="{{ url_for('meetings.index') }}"><i class="fa-solid fa-plus"></i> 새노트 만들기</a></li>
-                <li class="nav-item" data-page="record"><a href="{{ url_for('live.recorder') }}"><i class="fa-solid fa-microphone-lines"></i> 실시간 녹음</a></li>
-                <li class="nav-item" data-page="list_notes"><a href="{{ url_for('meetings.notes') }}"><i class="fa-solid fa-folder-open"></i> 노트 보기</a></li>
-                <li class="nav-item" data-page="shared_notes"><a href="{{ url_for('meetings.shared_notes') }}"><i class="fa-solid fa-share-nodes"></i> 공유 노트 보기</a></li>
+                <li class="nav-item" data-page="index"><a href="/"><i class="fa-solid fa-plus"></i> 새노트 만들기</a></li>
+                <li class="nav-item" data-page="record"><a href="/record"><i class="fa-solid fa-microphone-lines"></i> 실시간 녹음</a></li>
+                <li class="nav-item" data-page="list_notes"><a href="/notes"><i class="fa-solid fa-folder-open"></i> 노트 보기</a></li>
+                <li class="nav-item" data-page="shared_notes"><a href="/shared-notes"><i class="fa-solid fa-share-nodes"></i> 공유 노트 보기</a></li>
                 {% if is_admin %}
                 <li class="nav-header">Debug</li>
                 <li class="nav-item" data-page="retriever_page"><a href="{{ url_for('admin.retriever_page') }}"><i class="fa-solid fa-magnifying-glass"></i> 리트리버</a></li>

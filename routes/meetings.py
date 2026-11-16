@@ -3,7 +3,7 @@
 회의 CRUD, 통계, 마인드맵 등 핵심 기능
 (공유, 업로드, Action Items는 별도 모듈로 분리됨)
 """
-from flask import Blueprint, render_template, request, jsonify, session
+from flask import Blueprint, request, jsonify, session
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,6 @@ from services.user_service import (
     can_access_meeting,
     can_edit_meeting,
     get_user_meetings,
-    get_shared_meetings,
 )
 from services.analysis_service import calculate_speaker_share
 from services.meeting_service import MeetingService
@@ -35,13 +34,6 @@ meeting_service = MeetingService(
 )
 
 
-@meetings_bp.route("/")
-@login_required
-def index():
-    """메인 페이지 (파일 업로드 페이지)"""
-    return render_template("index.html")
-
-
 @meetings_bp.route("/api/stats", methods=["GET"])
 @login_required
 @api_error_handler
@@ -51,34 +43,6 @@ def get_user_stats():
     from services.user_service import is_admin
     stats = meeting_service.get_user_stats(user_id, is_admin(user_id))
     return jsonify({"success": True, "stats": stats})
-
-
-@meetings_bp.route("/notes")
-@login_required
-def notes():
-    """내 노트 목록 조회"""
-    user_id = session['user_id']
-    meetings = get_user_meetings(user_id)
-    return render_template("notes.html", meetings=meetings)
-
-
-@meetings_bp.route("/shared-notes")
-@login_required
-def shared_notes():
-    """공유받은 노트 목록 조회"""
-    user_id = session['user_id']
-    shared_meetings = get_shared_meetings(user_id)
-    return render_template("shared-notes.html", meetings=shared_meetings)
-
-
-@meetings_bp.route("/view/<string:meeting_id>")
-@login_required
-def view_meeting(meeting_id):
-    """회의록 뷰어 페이지"""
-    user_id = session['user_id']
-    if not can_access_meeting(user_id, meeting_id):
-        return "접근 권한이 없습니다.", 403
-    return render_template("viewer.html", meeting_id=meeting_id)
 
 
 @meetings_bp.route("/api/meeting/<string:meeting_id>")

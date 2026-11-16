@@ -2,7 +2,7 @@
 인증 관련 라우트
 로그인, 로그아웃, 사용자 정보 조회
 """
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, session
+from flask import Blueprint, request, jsonify, session
 import logging
 
 from config import config
@@ -26,21 +26,6 @@ def get_firebase_config():
         'success': True,
         'config': config.get_firebase_config()
     })
-
-
-@auth_bp.route("/login")
-def login_page():
-    """
-    로그인 페이지 표시
-
-    Returns:
-        로그인 페이지 HTML 또는 메인 페이지로 리다이렉트
-    """
-    # 이미 로그인된 경우 메인 페이지로 리다이렉트
-    if 'user_id' in session:
-        return redirect(url_for('meetings.index'))
-
-    return render_template("login.html")
 
 
 @auth_bp.route("/api/login", methods=["POST"])

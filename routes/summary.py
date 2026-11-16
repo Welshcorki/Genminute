@@ -10,6 +10,7 @@ from database import get_db_manager
 from database.vector_manager import vdb_manager
 from services.stt_service import STTManager
 from services.user_service import can_access_meeting
+from services.upload_service import upload_service, SUMMARY_NO_SEGMENTS, SUMMARY_TOO_SHORT
 from utils.decorators import login_required, admin_required
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ stt_manager = STTManager()
 @login_required
 def summarize(meeting_id):
     """
-    문단 요약 생성
+    문단 요약 생성 (마인드맵 키워드도 함께 재생성)
 
     Args:
         meeting_id: 회의 ID
@@ -44,42 +45,30 @@ def summarize(meeting_id):
         }), 403
 
     try:
-        # 1. meeting_id로 회의록 내용 조회
-        rows = db.get_meeting_by_id(meeting_id)
-        if not rows:
-            return jsonify({
-                "success": False,
-                "error": "해당 회의를 찾을 수 없습니다."
-            }), 404
+        # 업로드 파이프라인과 동일한 구현 사용 (요약 저장 + 마인드맵 재생성)
+        result = upload_service.generate_summary(meeting_id)
 
-        # 2. title, transcript_text, meeting_date, audio_file 추출
-        title = rows[0]['title']
-        meeting_date = rows[0]['meeting_date']
-        audio_file = rows[0]['audio_file']
-        transcript_text = " ".join([row['segment'] for row in rows])
-
-        # 3. stt_manager의 subtopic_generate를 이용해 요약 생성
-        summary_content = stt_manager.subtopic_generate(title, transcript_text)
-
-        if not summary_content:
+        if not result.get('success'):
+            code = result.get('code')
+            if code == SUMMARY_NO_SEGMENTS:
+                return jsonify({
+                    "success": False,
+                    "error": "해당 회의를 찾을 수 없습니다."
+                }), 404
+            if code == SUMMARY_TOO_SHORT:
+                return jsonify({
+                    "success": False,
+                    "error": "회의 내용이 너무 짧아 요약할 수 없습니다."
+                }), 400
             return jsonify({
                 "success": False,
                 "error": "요약 생성에 실패했습니다."
             }), 500
 
-        # 4. 생성한 내용을 'meeting_subtopic' DB에 저장
-        vdb_manager.add_meeting_as_subtopic(
-            meeting_id=meeting_id,
-            title=title,
-            meeting_date=meeting_date,
-            audio_file=audio_file,
-            summary_content=summary_content
-        )
-
         return jsonify({
             "success": True,
             "message": "요약이 성공적으로 생성 및 저장되었습니다.",
-            "summary": summary_content
+            "summary": result['summary']
         })
 
     except Exception as e:
