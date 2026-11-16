@@ -99,24 +99,3 @@ def admin_required(f):
         return f(*args, **kwargs)
 
     return decorated_function
-
-
-def optional_login(f):
-    """
-    로그인이 선택적인 라우트에 사용하는 데코레이터
-    로그인 여부와 상관없이 접근 가능하지만, 로그인 상태를 확인할 수 있음
-
-    사용법:
-        @app.route('/home')
-        @optional_login
-        def home():
-            if 'user_id' in session:
-                return f"Welcome back, {session['user_id']}"
-            return "Welcome, guest"
-    """
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        # 로그인 체크는 하지 않고, 세션만 확인
-        return f(*args, **kwargs)
-
-    return decorated_function

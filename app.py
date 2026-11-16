@@ -12,12 +12,9 @@ Flask 애플리케이션 메인 파일
 DI 조립: 이 파일의 초기화 섹션에서 Repository → Service → Route 순으로 조립합니다.
 DB 전환 시 이 파일의 Repository 생성 부분만 교체하면 됩니다.
 """
-from flask import Flask, render_template, jsonify, request, redirect, url_for, session, send_from_directory, Response
+from flask import Flask, session, send_from_directory
 from flask_cors import CORS
-import os
 import logging
-from logging.handlers import RotatingFileHandler
-from datetime import datetime
 
 from config import config
 # [검증 중 2026-11-16] 이 import는 app.py에서 사용되지 않아 주석 처리함.

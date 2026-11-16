@@ -72,11 +72,11 @@ ChromaDB(`database/vector_manager.py`, `database/vector_db/`에 영구 저장)�
 
 ### 라우트
 
-Blueprint는 `routes/__init__.py`의 `register_blueprints()`에서 등록됩니다. 회의 기능은 여러 Blueprint로 분리되어 있습니다(`meetings`, `meetings_share`, `meetings_upload`, `meetings_action_items`). 인증/인가는 `utils/decorators.py`의 데코레이터를 사용합니다: `@login_required`, `@admin_required`, `@optional_login`, `@api_error_handler`(에러 응답을 표준화 — 라우트마다 try/except 대신 이걸 사용). 관리자는 `ADMIN_EMAILS` env로 결정됩니다.
+Blueprint는 `routes/__init__.py`의 `register_blueprints()`에서 등록됩니다. 회의 기능은 여러 Blueprint로 분리되어 있습니다(`meetings`, `meetings_share`, `meetings_upload`, `meetings_action_items`). 인증/인가는 `utils/decorators.py`의 데코레이터를 사용합니다: `@login_required`, `@admin_required`, `@api_error_handler`(에러 응답을 표준화 — 라우트마다 try/except 대신 이걸 사용). 관리자는 `ADMIN_EMAILS` env로 결정됩니다.
 
 ### 프론트엔드 현황
 
-`frontend/`(React 19 + Vite + TS + Tailwind)가 실제 동작하는 SPA입니다. `templates/`(Jinja2)와 `static/`는 **레거시**입니다 — 여기에 기능을 추가하지 마세요. `genminute-dashboard/`는 별도의 대시보드 앱입니다.
+`frontend/`(React 19 + Vite + TS + Tailwind)가 실제 동작하는 SPA입니다. `templates/`(Jinja2)와 `static/`는 **레거시**입니다 — 여기에 기능을 추가하지 마세요.
 
 ### 장시간 업로드 처리
 
