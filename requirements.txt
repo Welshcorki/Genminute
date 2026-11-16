@@ -46,12 +46,16 @@ langchain-google-genai>=1.0.0
 langchain-openai>=0.1.0
 langchain-text-splitters>=0.2.0
 langchain-chroma>=0.1.0
+langchain-classic>=1.0,<2.0  # SelfQueryRetriever (database/vector_manager.py)
+langgraph>=1.0,<2.0          # Action Item 에이전트 (services/agent_service.py)
 
 # -----------------------------------------
 # 5. Local STT & Diarization
 # -----------------------------------------
 faster-whisper==1.2.0
 pyannote.audio>=3.1,<4.0
+# 선택: Intel GPU/NPU 가속(STT_BACKEND=openvino)을 쓸 때만 별도 설치
+#   pip install openvino optimum[openvino] transformers
 
 # -----------------------------------------
 # 6. Calendar & External Tools

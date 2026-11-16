@@ -87,7 +87,7 @@ AI 기반 회의록 자동 생성 시스템
 - **취소 및 결과 보기**: 업로드 취소 및 완료 후 노트로 이동
 
 ### 7. AI 에이전트 (Action Item)
-- **LangGraph 기반**: 지능형 에이전트로 Action Item 자동 추출 (`langgraph`는 `requirements.txt`에 없어 별도 설치 필요)
+- **LangGraph 기반**: 지능형 에이전트로 Action Item 자동 추출
 - **Google Calendar 연동**: OAuth 2.0 기반 일정 자동 등록
 - 회의록에서 Action Item 인식 및 외부 도구 연동
 
@@ -107,7 +107,7 @@ AI 기반 회의록 자동 생성 시스템
   - Faster-Whisper 1.2.0 (로컬 STT 옵션)
   - Pyannote.Audio 3.1+ (화자 분리)
 - **벡터 데이터베이스**: ChromaDB + LangChain
-- **에이전트 프레임워크**: LangGraph (`requirements.txt` 미포함 — 별도 설치 필요)
+- **에이전트 프레임워크**: LangGraph
 - **데이터베이스**: SQLite (관계형 데이터), ChromaDB (벡터 임베딩)
   - `DB_TYPE` 환경변수로 `sqlite`(기본) / `supabase` 전환 가능 (Repository 패턴)
 - **인증**: Firebase Authentication (Admin SDK로 ID 토큰 검증)
