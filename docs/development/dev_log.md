@@ -2020,3 +2020,45 @@ import type { UploadProgress } from '../services/upload';
 - 에이전트 `messages` 상태가 실행마다 중복 누적되는 것으로 보임(리듀서가 더하는데 노드도 전체 목록을 반환). AI 파이프라인이라 미수정.
 - 관리자 `/upload_script`의 세그먼트 키(`speaker_label`/`segment`)가 저장 함수가 기대하는 키(`speaker`/`text`)와 달라 동작하지 않을 가능성 — 관리자 재구현 때 확인.
 - 커밋 `383e96f`의 메시지에는 데코레이터·app.py 정리가 적혀 있으나 실제 내용은 파일 3개 삭제뿐이며, 해당 변경은 `27063bb`에 있음.
+
+---
+
+## 2026년 11월 16일 - 연결이 끊긴 기능 검증: 스크립트 입력 복구, WebM 변환은 보류
+
+### 1. 목표 (무엇을·왜)
+- 호출부가 없어 삭제 후보였던 두 함수가 "죽은 코드"인지 "연결이 끊긴 기능"인지 실제로 돌려 보고 판단한다.
+
+### 2. `STTManager.parse_script` → 연결함
+- **확인**: 관리자 화면(`script_input.html`)은 "화자번호: 텍스트" 형식을 안내하고 `parse_script`가 정확히 그 형식을 구현함. 반면 `/upload_script` 라우트는
+  임시 파싱을 쓰고 있었고, 실제 요청 시 **항상 500**이었음(재현).
+- **원인 3가지**: ① `routes/admin.py`에 `os`·`datetime`·`session`·`json`·`Response` import 누락 ② 화면 필드명(`script_text`)과 라우트(`script`) 불일치
+  ③ 임시 파싱 결과의 키(`speaker_label`/`segment`)가 저장 함수가 받는 키(`speaker`/`text`)와 다름. 추가로 화면 JS는 JSON을 기대하는데 라우트는 SSE로 응답.
+- **수정**: import 보완, `parse_script` 사용, JSON 응답, 이동 경로를 `/notes/<id>`로. 테스트 12건 추가(`tests/test_admin_script_upload.py`).
+- import 누락은 `/api/test_stt`, `/api/test_minutes`에도 영향을 주고 있었음(같은 수정으로 해소, 해당 API의 실제 LLM 호출은 미검증).
+
+### 3. `upload_service.convert_webm_to_compatible_format` → 연결하지 않음 (결정 대기)
+- **정정**: 직전 기록의 "리팩토링에서 호출부가 사라짐"은 불완전. 커밋 `66eee00`에서 **의도적으로 주석 처리**됨
+  (`[OPTIMIZATION] 업로드 속도 향상을 위해 MP4 변환 로직 주석 처리 (On-Demand로 변경 예정)`), 이후 주석 블록째 삭제.
+- **실측**(uploads의 녹음 파일 복사본, ffmpeg 8.0.1):
+
+| 파일 | 방식 | 결과 | 소요 |
+|---|---|---|---|
+| 화면 녹화 47초 (13.8MB, 접두어 없음) | 기존 함수 | **M4A 0.7MB — 영상이 사라짐** | 1.2초 |
+| 〃 | 재포장만(`-c copy`) | WebM 13.8MB, 길이 정보 생김 | 0.1초 |
+| 화면 녹화 27초 (6.8MB, `video_` 접두어) | 기존 함수 | MP4 5.2MB | 6.0초 |
+| 〃 | 재포장만(`-c copy`) | WebM 6.8MB, 길이 정보 생김 | 0.0초 |
+
+- **그대로 연결하면 안 되는 이유**: 함수는 파일명에 `video_`가 있어야 영상으로 취급하는데, 이 접두어는 삭제된 레거시 녹음 화면이 붙이던 것.
+  현재 React 녹음 화면은 `제목.webm`으로 올리므로 **모든 화면 녹화가 음성 전용으로 바뀌어 영상이 사라진다.**
+- **실제 문제는 남아 있음**: 브라우저가 녹음한 WebM에는 길이 정보가 없음(uploads의 녹음 파일 전부 `duration=N/A`).
+  프론트는 `NaN/Infinity` 표시만 우회했고, 길이를 모르면 탐색 바·구간 반복이 제대로 동작하기 어렵다.
+- **권장안(미적용)**: 재인코딩 대신 재포장(`ffmpeg -c copy`)으로 길이 정보만 채움. 영상 보존, 0.1초 수준이라 과거 비활성화 사유(속도)도 해소.
+
+### 4. 환경 스냅샷
+- `docs/development/env_snapshots/`에 업데이트 전후 `pip freeze` 저장(되돌리기·비교용).
+
+### 5. OpenVINO(Intel 가속) 조사 결과 (미적용)
+- 이 PC에는 Intel Arc 130V GPU와 NPU가 있어 가속 대상이 존재.
+- optimum-intel 2.1.0 이상이 transformers `>=4.51,<5.6`을 지원 → 설치된 5.3.0과 호환. 단 openvino `>=2026.0` 필요(현재 2025.4.0).
+- 설치 시뮬레이션: `optimum-intel[openvino]==2.2.0` → optimum 2.3.0, openvino 2026.4.1, nncf 3.4.0, openvino-tokenizers, torchvision 0.20.1 설치. torch·transformers·numpy는 유지. 충돌 없음.
+- 적용 시 `STT_BACKEND=auto`가 OpenVINO를 감지해 **STT 백엔드가 faster-whisper(CPU) → OpenVINO(Intel GPU, distil-large-v3)로 바뀜** — 인식 결과가 달라질 수 있어 실제 음성 테스트와 함께 진행 필요.
