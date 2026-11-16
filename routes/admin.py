@@ -2,13 +2,18 @@
 관리자 전용 라우트
 검색 테스트, 스크립트 입력 등 디버그 기능
 """
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify, request, session
+import os
+import logging
+from datetime import datetime
 
 from database import get_db_manager
 from database.vector_manager import vdb_manager
 from services.stt_service import STTManager
-from utils.decorators import login_required, admin_required
+from utils.decorators import login_required, admin_required, api_error_handler
 from config import config
+
+logger = logging.getLogger(__name__)
 
 # Blueprint 생성
 admin_bp = Blueprint('admin', __name__)
@@ -16,6 +21,9 @@ admin_bp = Blueprint('admin', __name__)
 # 매니저 초기화
 db = get_db_manager()
 stt_manager = STTManager()
+
+# 스크립트 입력으로 만든 회의는 음성 파일이 없으므로 audio_file 자리에 넣는 표시값
+SCRIPT_INPUT_AUDIO_PLACEHOLDER: str = "script_input.txt"
 
 
 @admin_bp.route("/retriever")
@@ -83,90 +91,71 @@ def search():
 @admin_bp.route("/upload_script", methods=["POST"])
 @login_required
 @admin_required
+@api_error_handler
 def upload_script():
     """
     스크립트 직접 입력 처리 (관리자 전용)
 
+    음성 파일 없이 화자 표기가 있는 텍스트를 회의로 등록합니다.
+    지원 형식은 STTManager.parse_script 참조 ("1: 텍스트", "홍길동: 텍스트", "[1] 텍스트" 등).
+
+    Form:
+        title: 회의 제목 (선택, 기본 "스크립트 입력")
+        script_text: 스크립트 본문
+        meeting_date: 회의 일시 "YYYY-MM-DDTHH:MM" (선택, 기본 현재 시각)
+
     Returns:
-        POST: 스크립트 처리 결과 (SSE 스트리밍)
+        JSON: {"success", "meeting_id", "redirect_url", "segments_count"}
     """
-    # POST 요청: 스크립트 처리
-    def generate():
-        try:
-            # 입력 데이터 추출
-            title = request.form.get("title", "스크립트 입력")
-            script_text = request.form.get("script", "")
-            meeting_date_str = request.form.get("meeting_date", "")
+    title = (request.form.get("title") or "").strip() or "스크립트 입력"
+    script_text = (request.form.get("script_text") or "").strip()
+    meeting_date_str = (request.form.get("meeting_date") or "").strip()
 
-            user_id = session['user_id']
+    if not script_text:
+        return jsonify({"success": False, "error": "스크립트를 입력해주세요."}), 400
 
-            if not script_text:
-                yield f"data: {json.dumps({'event': 'error', 'message': '스크립트를 입력해주세요.'})}\n\n"
-                return
+    if meeting_date_str:
+        # 형식이 틀리면 ValueError → api_error_handler가 400으로 변환
+        meeting_date = datetime.strptime(meeting_date_str, "%Y-%m-%dT%H:%M")
+    else:
+        meeting_date = datetime.now()
 
-            # 날짜 파싱
-            if meeting_date_str:
-                meeting_date = datetime.strptime(meeting_date_str, "%Y-%m-%dT%H:%M")
-            else:
-                meeting_date = datetime.now()
+    # 1. 스크립트 파싱 (화자 표기 인식)
+    segments = stt_manager.parse_script(script_text)
+    if not segments:
+        return jsonify({
+            "success": False,
+            "error": "화자를 인식할 수 있는 줄이 없습니다. \"1: 내용\" 또는 \"이름: 내용\" 형식으로 입력해주세요.",
+        }), 400
 
-            meeting_date_formatted = meeting_date.strftime("%Y-%m-%d %H:%M:%S")
+    # 2. 관계형 DB 저장
+    meeting_id = db.save_stt_to_db(
+        segments=segments,
+        audio_filename=SCRIPT_INPUT_AUDIO_PLACEHOLDER,
+        title=title,
+        meeting_date=meeting_date.strftime("%Y-%m-%d %H:%M:%S"),
+        owner_id=session['user_id'],
+    )
 
-            # Step 1: 스크립트 파싱
-            yield f"data: {json.dumps({'event': 'script', 'message': '스크립트 분석 중...'})}\n\n"
+    # 3. 벡터 DB 저장 (저장된 세그먼트를 다시 조회해 업로드 파이프라인과 같은 형식으로 전달)
+    all_segments = db.get_segments_by_meeting_id(meeting_id)
+    if all_segments:
+        first_segment = all_segments[0]
+        vdb_manager.add_meeting_as_chunk(
+            meeting_id=meeting_id,
+            title=first_segment['title'],
+            meeting_date=first_segment['meeting_date'],
+            audio_file=first_segment['audio_file'],
+            segments=all_segments,
+        )
 
-            # 간단한 파싱 (라인별로 분리)
-            lines = script_text.strip().split('\n')
-            segments = []
-
-            for idx, line in enumerate(lines):
-                if line.strip():
-                    segments.append({
-                        'speaker_label': f'SPEAKER_{idx % 3:02d}',  # 3명 순환
-                        'start_time': idx * 5.0,  # 5초 간격
-                        'segment': line.strip(),
-                        'confidence': 1.0
-                    })
-
-            # Step 2: DB 저장
-            yield f"data: {json.dumps({'event': 'db', 'message': 'DB 저장 중...'})}\n\n"
-
-            meeting_id = db.save_stt_to_db(
-                segments=segments,
-                audio_filename="script_input.txt",
-                title=title,
-                meeting_date=meeting_date_formatted,
-                owner_id=user_id
-            )
-
-            # Step 3: Vector DB 저장
-            yield f"data: {json.dumps({'event': 'vector', 'message': 'Vector DB 저장 중...'})}\n\n"
-
-            # DB에서 저장된 세그먼트 다시 조회
-            all_segments = db.get_segments_by_meeting_id(meeting_id)
-
-            if all_segments:
-                first_segment = all_segments[0]
-                vdb_manager.add_meeting_as_chunk(
-                    meeting_id=meeting_id,
-                    title=first_segment['title'],
-                    meeting_date=first_segment['meeting_date'],
-                    audio_file=first_segment['audio_file'],
-                    segments=all_segments
-                )
-                print(f"✅ meeting_chunks에 저장 완료 (meeting_id: {meeting_id})")
-
-            # 완료
-            redirect_url = f"/view/{meeting_id}"
-            yield f"data: {json.dumps({'event': 'complete', 'message': '완료!', 'redirect_url': redirect_url})}\n\n"
-
-        except Exception as e:
-            print(f"❌ 스크립트 처리 실패: {e}")
-            import traceback
-            traceback.print_exc()
-            yield f"data: {json.dumps({'event': 'error', 'message': f'처리 중 오류: {str(e)}'})}\n\n"
-
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+    logger.info(f"✅ 스크립트 입력 처리 완료 (meeting_id: {meeting_id}, {len(segments)}개 세그먼트)")
+    return jsonify({
+        "success": True,
+        "meeting_id": meeting_id,
+        "redirect_url": f"/notes/{meeting_id}",
+        "segments_count": len(segments),
+    })
 
 
 # ==================== 디버그 페이지들 ====================
