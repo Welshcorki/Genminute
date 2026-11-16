@@ -58,6 +58,17 @@ class TestSupabaseMeetingRepositoryVectorSync(unittest.TestCase):
         self.assertTrue(result["success"])
         self.vdb.delete_from_collection.assert_not_called()
 
+    def test_delete_returns_counts_expected_by_vector_manager(self):
+        # vdb_manager._delete_all_meeting_data가 결과에서 dialogues/minutes/shares 키를 읽는다
+        execute = self.client.table.return_value.delete.return_value.eq.return_value.execute
+        execute.return_value = mock.Mock(data=[{"id": 1}, {"id": 2}])
+
+        result = self.repo.delete_meeting_by_id("m1")
+
+        self.assertEqual(result["dialogues"], 2)
+        self.assertEqual(result["minutes"], 2)
+        self.assertEqual(result["shares"], 2)
+
     def test_delete_removes_rows_from_all_tables(self):
         self.repo.delete_meeting_by_id("m1")
 

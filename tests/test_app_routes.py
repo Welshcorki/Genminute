@@ -12,77 +12,14 @@
 
 전체 의존성(chromadb, torch 등)과 .env가 필요하므로, 앱을 import할 수 없는 환경에서는 건너뜁니다.
 """
-import os
-import sqlite3
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import Config
-
-_db_fd, _db_path = tempfile.mkstemp(suffix=".db")
-os.close(_db_fd)
-
-app_module = None
-SKIP_REASON = ""
-
-try:
-    # 실제 DB(database/minute_ai.db)를 건드리지 않도록 import 전에 경로를 교체
-    Config.DB_TYPE = "sqlite"
-    Config.DATABASE_PATH = Path(_db_path)
-
-    import app as app_module
-
-    if str(getattr(app_module.db, "db_path", "")) != _db_path:
-        # 다른 테스트가 먼저 DB 싱글톤을 만든 경우 — 실제 DB 보호를 위해 건너뜀
-        SKIP_REASON = "DB 싱글톤이 이미 다른 경로로 초기화됨"
-        app_module = None
-except Exception as e:  # 의존성/환경 변수 미비
-    SKIP_REASON = f"앱 import 불가: {type(e).__name__}: {e}"
-    app_module = None
-
-
-def tearDownModule():
-    try:
-        os.unlink(_db_path)
-    except OSError:
-        pass
-
-
-def _insert_user(email: str, role: str) -> int:
-    conn = sqlite3.connect(_db_path)
-    try:
-        cursor = conn.execute(
-            "INSERT INTO users (google_id, email, name, role) VALUES (?, ?, ?, ?)",
-            (f"gid-{email}", email, email.split("@")[0], role),
-        )
-        conn.commit()
-        return cursor.lastrowid
-    finally:
-        conn.close()
-
-
-@unittest.skipIf(app_module is None, SKIP_REASON)
-class AppRouteTestBase(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.app = app_module.app
-        cls.db = app_module.db
-        suffix = cls.__name__.lower()
-        cls.user_id = _insert_user(f"user-{suffix}@example.com", "user")
-        cls.admin_id = _insert_user(f"admin-{suffix}@example.com", "admin")
-
-    def setUp(self):
-        self.client = self.app.test_client()
-
-    def login_as(self, user_id: int):
-        with self.client.session_transaction() as sess:
-            sess["user_id"] = user_id
+from app_harness import AppRouteTestBase, insert_user
 
 
 class TestSpaRouting(AppRouteTestBase):
@@ -149,12 +86,6 @@ class TestAdminPages(AppRouteTestBase):
 class TestSummarize(AppRouteTestBase):
     """수동 요약(/api/summarize)은 업로드 파이프라인과 같은 구현을 써야 한다"""
 
-    def _create_meeting(self, text: str) -> str:
-        segments = [{"speaker": "1", "start_time": 0.0, "text": text, "confidence": 0.9}]
-        return self.db.save_stt_to_db(
-            segments, "test.wav", "테스트 회의", "2026-01-01 10:00:00", owner_id=self.user_id,
-        )
-
     def _patch_llm_and_vector(self, summary="### 요약", mindmap="# 마인드맵"):
         from services.upload_service import upload_service
         return mock.patch.multiple(
@@ -168,7 +99,7 @@ class TestSummarize(AppRouteTestBase):
 
     def test_summarize_saves_summary_and_regenerates_mindmap(self):
         from services.upload_service import upload_service
-        meeting_id = self._create_meeting("회의 내용입니다. " * 20)
+        meeting_id = self.create_meeting("회의 내용입니다. " * 20)
         self.login_as(self.user_id)
 
         with self._patch_llm_and_vector(mindmap="# 새 마인드맵"):
@@ -183,7 +114,7 @@ class TestSummarize(AppRouteTestBase):
         self.assertEqual(self.db.get_mindmap_by_meeting_id(meeting_id), "# 새 마인드맵")
 
     def test_summarize_too_short_returns_400(self):
-        meeting_id = self._create_meeting("짧음")
+        meeting_id = self.create_meeting("짧음")
         self.login_as(self.user_id)
 
         with self._patch_llm_and_vector():
@@ -193,7 +124,7 @@ class TestSummarize(AppRouteTestBase):
         self.assertFalse(res.get_json()["success"])
 
     def test_summarize_llm_failure_returns_500(self):
-        meeting_id = self._create_meeting("회의 내용입니다. " * 20)
+        meeting_id = self.create_meeting("회의 내용입니다. " * 20)
         self.login_as(self.user_id)
 
         with self._patch_llm_and_vector(summary=""):
@@ -203,8 +134,8 @@ class TestSummarize(AppRouteTestBase):
         self.assertFalse(res.get_json()["success"])
 
     def test_summarize_without_access_returns_403(self):
-        meeting_id = self._create_meeting("회의 내용입니다. " * 20)
-        other_id = _insert_user("other-summarize@example.com", "user")
+        meeting_id = self.create_meeting("회의 내용입니다. " * 20)
+        other_id = insert_user("other-summarize@example.com")
         self.login_as(other_id)
 
         with self._patch_llm_and_vector():

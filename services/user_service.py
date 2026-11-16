@@ -351,7 +351,9 @@ class UserService:
         conn = self._conn.get_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT owner_id FROM meeting_minutes WHERE meeting_id = ?", (meeting_id,))
+            # 소유자는 meeting_dialogues 기준 (share_meeting과 동일).
+            # meeting_minutes는 정식 회의록을 생성한 회의에만 행이 있어 기준으로 쓸 수 없다.
+            cursor.execute("SELECT owner_id FROM meeting_dialogues WHERE meeting_id = ? LIMIT 1", (meeting_id,))
             result = cursor.fetchone()
             if not result or result['owner_id'] != owner_id:
                 return {'success': False, 'message': '회의 소유자만 공유를 제거할 수 있습니다.'}

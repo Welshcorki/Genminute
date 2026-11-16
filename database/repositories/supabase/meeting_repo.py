@@ -81,15 +81,26 @@ class SupabaseMeetingRepository(MeetingRepositoryInterface):
         return len(res.data)
 
     def delete_meeting_by_id(self, meeting_id: str) -> Dict:
-        self._client.table('meeting_dialogues').delete().eq('meeting_id', meeting_id).execute()
-        self._client.table('meeting_minutes').delete().eq('meeting_id', meeting_id).execute()
-        self._client.table('meeting_mindmap').delete().eq('meeting_id', meeting_id).execute()
-        self._client.table('meeting_action_items').delete().eq('meeting_id', meeting_id).execute()
-        self._client.table('meeting_shares').delete().eq('meeting_id', meeting_id).execute()
+        deleted: Dict[str, int] = {}
+        for table in (
+            'meeting_dialogues', 'meeting_minutes', 'meeting_mindmap',
+            'meeting_action_items', 'meeting_shares',
+        ):
+            res = self._client.table(table).delete().eq('meeting_id', meeting_id).execute()
+            deleted[table] = len(res.data or [])
         
         # ChromaDB/오디오 파일 삭제는 호출자(vdb_manager._delete_all_meeting_data)가 수행한다.
         # 여기서 delete_from_collection('all')을 호출하면 서로를 다시 불러 무한 재귀가 된다.
-        return {"success": True, "message": "회의가 삭제되었습니다."}
+        # 반환 형식은 SQLite 구현과 동일 (호출자가 dialogues/minutes/shares 키를 사용)
+        return {
+            "success": True,
+            "message": "회의가 삭제되었습니다.",
+            "dialogues": deleted['meeting_dialogues'],
+            "minutes": deleted['meeting_minutes'],
+            "shares": deleted['meeting_shares'],
+            "mindmap": deleted['meeting_mindmap'],
+            "action_items": deleted['meeting_action_items'],
+        }
 
     def get_user_stats(self, user_id: int, is_admin: bool) -> Dict:
         from datetime import datetime

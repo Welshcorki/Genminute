@@ -1948,3 +1948,32 @@ import type { UploadProgress } from '../services/upload';
 - Supabase 수정 2건은 mock 테스트까지만 검증(실제 Supabase 프로젝트 없음).
 - `/notes_json`, `/upload`처럼 `/api/`로 시작하지 않는 JSON 엔드포인트는 비로그인 시 401 대신 `/login`으로 리다이렉트됨(기존 동작, 미수정). 프론트의 `ENABLE_PUBLIC_ACCESS=true`와 맞물려 비로그인 목록 화면에서 HTML을 받게 됨 → 후속 수정 후보.
 - `test_app_routes`의 요약 테스트는 수정 전 코드에서 실제 Gemini 호출을 시도했음(라우트가 서비스 mock을 우회했기 때문) — 단일화로 해소.
+
+---
+
+## 2026년 11월 16일 - 스모크 테스트 구축 (리팩토링 안전망) + 추가 버그 3건
+
+### 1. 목표 (무엇을·왜)
+- 리팩토링(구조 변경) 전후로 "동작이 바뀌지 않았다"를 확인할 수 있도록 실제 사용 경로(SQLite)의 라우트 테스트를 깐다.
+
+### 2. 주요 변경 사항 (어떻게)
+- `tests/app_harness.py`(신규): 실제 Flask 앱을 임시 SQLite DB로 1회 부팅하는 공용 하네스. 실 DB 미접근, 앱 import 불가 환경에서는 자동 skip.
+- `tests/test_meeting_routes.py`(신규, 22건): 회의 조회/목록/통계, 제목·날짜 수정, 삭제(DB+벡터+파일), 공유/해제, Action Item, 권한(소유자/타인/관리자/비로그인).
+- `tests/test_app_routes.py`: 하네스 사용으로 정리.
+- 벡터 DB는 메서드/컬렉션 단위 mock, 업로드 폴더는 임시 폴더로 대체.
+
+### 3. 테스트가 찾아낸 버그 (수정 포함)
+| 증상 | 원인 | 수정 |
+|---|---|---|
+| (SQLite) 정식 회의록을 만들지 않은 회의는 공유 해제가 항상 실패 | `UserService.remove_share`가 소유자를 `meeting_minutes`에서 조회(Supabase 구현은 `meeting_dialogues` — 서비스 2벌의 불일치) | `meeting_dialogues` 기준으로 통일 |
+| (Supabase) 회의 삭제 마지막에 KeyError | `delete_meeting_by_id` 반환 형식이 SQLite와 달라 `vdb_manager`가 읽는 `dialogues`/`minutes` 키 없음 | 테이블별 삭제 건수를 SQLite와 같은 키로 반환 |
+| Flask가 서빙하는 화면을 `127.0.0.1`로 열면 모든 API가 CORS로 차단 | 프론트 API 주소가 `http://localhost:5000` 고정 | 빌드 결과물은 같은 출처(상대 경로) 사용 (커밋 `3a5633c`) |
+
+### 4. 검증
+- 전체 73건 통과(`genminute_stt` 환경). 기본 python(pyenv)에서는 의존성 부족으로 대부분 skip.
+- **실제 Google 로그인 확인 완료**(사용자, `http://localhost:5000`): Firebase를 기존 GCP 프로젝트에 추가, 서비스 계정 키 배치.
+
+### 5. 알려진 이슈 / 남은 일
+- 미커버: 업로드 SSE 파이프라인(`/upload`), 회의록 생성(`/api/generate_minutes`), 챗봇(`/api/chat`), Action Item 추출 — LLM/STT 의존이 커서 서비스 통합 단계에서 mock 경계를 정리하며 추가 예정.
+- `firebase-adminsdk.json`은 반드시 이 파일명으로 둘 것(.gitignore가 이 이름만 제외).
+- 로컬 접속은 `localhost:5000` 사용(Firebase 승인 도메인·Calendar OAuth 리다이렉트가 `localhost` 기준).
