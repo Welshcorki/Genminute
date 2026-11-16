@@ -1,6 +1,6 @@
 /**
  * 인증 서비스
- * Supabase Access Token 기반 백엔드 인증
+ * Firebase ID 토큰 기반 백엔드 인증
  */
 import api from './api';
 
@@ -20,11 +20,11 @@ export interface LoginResponse {
 
 export const authService = {
   /**
-   * Supabase Access Token으로 백엔드 로그인
-   * @param accessToken Supabase에서 받은 Access Token
+   * Firebase ID 토큰으로 백엔드 로그인
+   * @param idToken Firebase에서 받은 ID 토큰
    */
-  loginWithAccessToken: async (accessToken: string): Promise<LoginResponse> => {
-    const response = await api.post('/api/login', { accessToken });
+  loginWithIdToken: async (idToken: string): Promise<LoginResponse> => {
+    const response = await api.post('/api/login', { idToken });
     return response.data;
   },
 

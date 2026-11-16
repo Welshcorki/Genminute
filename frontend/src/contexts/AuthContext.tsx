@@ -1,11 +1,21 @@
 /**
  * 인증 컨텍스트
- * 전역 인증 상태 관리 및 Supabase 연동
+ * 전역 인증 상태 관리 및 Firebase 연동
  */
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
-import { supabase } from '../config/supabase';
+import {
+  signInWithPopup,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+} from 'firebase/auth';
+import type { User as FirebaseUser } from 'firebase/auth';
+import {
+  ensureFirebaseInitialized,
+  getFirebaseAuth,
+  getGoogleProvider,
+  isFirebaseInitialized,
+} from '../config/firebase';
 import api from '../services/api';
 
 // 사용자 정보 타입
@@ -20,9 +30,10 @@ interface User {
 // 인증 컨텍스트 타입
 interface AuthContextType {
   user: User | null;
-  supabaseUser: SupabaseUser | null;
+  firebaseUser: FirebaseUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  firebaseReady: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -38,49 +49,52 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
-  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [firebaseReady, setFirebaseReady] = useState(false);
 
-  // Supabase 인증 상태 감지
+  // Firebase 초기화 및 인증 상태 감지
   useEffect(() => {
-    // 현재 세션 확인
+    let unsubscribe: (() => void) | null = null;
+    let cancelled = false;
+
     const initAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          setSupabaseUser(session.user);
-          await syncWithBackend(session);
-        }
+        await ensureFirebaseInitialized();
+        if (cancelled) return;
+        setFirebaseReady(true);
+
+        // Firebase 인증 상태 변경 감지
+        unsubscribe = onAuthStateChanged(getFirebaseAuth(), async (fbUser) => {
+          setFirebaseUser(fbUser);
+
+          if (fbUser) {
+            await syncWithBackend(fbUser);
+          } else {
+            setUser(null);
+          }
+
+          setIsLoading(false);
+        });
       } catch (error) {
-        console.error('인증 초기화 실패:', error);
-      } finally {
+        console.error('Firebase 초기화 실패:', error);
+        setFirebaseReady(false);
         setIsLoading(false);
       }
     };
 
     initAuth();
 
-    // 인증 상태 변경 리스너
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSupabaseUser(session?.user ?? null);
-
-        if (event === 'SIGNED_IN' && session) {
-          await syncWithBackend(session);
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-        }
-      }
-    );
-
     return () => {
-      subscription.unsubscribe();
+      cancelled = true;
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
   }, []);
 
   // 백엔드와 세션 동기화
-  const syncWithBackend = async (session: Session) => {
+  const syncWithBackend = async (fbUser: FirebaseUser) => {
     try {
       // 먼저 기존 백엔드 세션 확인
       try {
@@ -93,9 +107,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         // 백엔드 세션 없음 → 로그인 시도
       }
 
-      // Supabase access token으로 백엔드 로그인
-      const accessToken = session.access_token;
-      const loginResponse = await api.post('/api/login', { accessToken });
+      // Firebase ID 토큰으로 백엔드 로그인
+      const idToken = await fbUser.getIdToken();
+      const loginResponse = await api.post('/api/login', { idToken });
       if (loginResponse.data.success) {
         setUser(loginResponse.data.user);
       }
@@ -105,22 +119,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // Google 로그인
+  // Google 로그인 (팝업 방식)
   const signInWithGoogle = async () => {
+    if (!isFirebaseInitialized()) {
+      throw new Error('Firebase가 아직 초기화되지 않았습니다.');
+    }
+
     try {
       setIsLoading(true);
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin + '/auth/callback',
-        },
-      });
+      const result = await signInWithPopup(getFirebaseAuth(), getGoogleProvider());
+      const idToken = await result.user.getIdToken();
 
-      if (error) {
-        throw error;
+      // 백엔드에 ID 토큰 전송하여 세션 생성
+      const response = await api.post('/api/login', { idToken });
+
+      if (response.data.success) {
+        setUser(response.data.user);
+      } else {
+        throw new Error(response.data.error || '로그인에 실패했습니다.');
       }
-      // OAuth 리다이렉트가 발생하므로, 이후 처리는 onAuthStateChange에서 수행
     } catch (error: unknown) {
       console.error('Google 로그인 실패:', error);
       throw error;
@@ -137,8 +155,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // 백엔드 세션 삭제
       await api.post('/api/logout');
 
-      // Supabase 로그아웃
-      await supabase.auth.signOut();
+      // Firebase 로그아웃 (초기화된 경우에만)
+      if (isFirebaseInitialized()) {
+        await firebaseSignOut(getFirebaseAuth());
+      }
 
       setUser(null);
     } catch (error) {
@@ -163,9 +183,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const value: AuthContextType = {
     user,
-    supabaseUser,
+    firebaseUser,
     isLoading,
     isAuthenticated: !!user,
+    firebaseReady,
     signInWithGoogle,
     signOut,
     refreshUser,

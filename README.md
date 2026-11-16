@@ -92,8 +92,8 @@ AI 기반 회의록 자동 생성 시스템
 - 회의록에서 Action Item 인식 및 외부 도구 연동
 
 ### 8. 사용자 인증
-- **Google 계정 로그인**: Supabase Auth (프론트엔드에서 Access Token 발급 → 백엔드 검증)
-- **세션 관리**: Flask 세션 기반 (`/api/login`에서 Supabase Access Token 검증 후 세션 생성)
+- **Google 계정 로그인**: Firebase Authentication (프론트엔드에서 ID 토큰 발급 → 백엔드 검증)
+- **세션 관리**: Flask 세션 기반 (`/api/login`에서 Firebase ID 토큰 검증 후 세션 생성)
 - **관리자 모드**: `ADMIN_EMAILS` 기반 권한, 디버그 도구 및 고급 기능 접근
 
 ---
@@ -108,9 +108,9 @@ AI 기반 회의록 자동 생성 시스템
   - Pyannote.Audio 3.1+ (화자 분리)
 - **벡터 데이터베이스**: ChromaDB + LangChain
 - **에이전트 프레임워크**: LangGraph (`requirements.txt` 미포함 — 별도 설치 필요)
-- **데이터베이스**: Supabase (PostgreSQL, 관계형 데이터 + Auth), ChromaDB (벡터 임베딩)
-  - `DB_TYPE` 환경변수로 `supabase`(기본) / `sqlite` 전환 가능 (Repository 패턴)
-- **인증**: Supabase Auth (Access Token 검증)
+- **데이터베이스**: SQLite (관계형 데이터), ChromaDB (벡터 임베딩)
+  - `DB_TYPE` 환경변수로 `sqlite`(기본) / `supabase` 전환 가능 (Repository 패턴)
+- **인증**: Firebase Authentication (Admin SDK로 ID 토큰 검증)
 - **임베딩**: OpenAI Embeddings (`EMBEDDING_MODEL` 환경변수, 기본 text-embedding-ada-002)
 - **오디오 처리**: ffmpeg
 
@@ -120,7 +120,7 @@ AI 기반 회의록 자동 생성 시스템
 - **라우팅**: React Router DOM 7.10.1
 - **스타일링**: Tailwind CSS 3.4.1
 - **HTTP 클라이언트**: Axios 1.13.2
-- **인증**: Supabase JS 클라이언트 (Google OAuth)
+- **인증**: Firebase JS SDK (Google 로그인 팝업)
 - **아이콘**: Lucide React 0.559.0
 - **차트**: Chart.js (화자 비중 시각화)
 - **마인드맵**: Markmap (SVG 기반 인터랙티브 렌더링)
@@ -198,7 +198,7 @@ genminute/
 │   │   ├── hooks/                  # 커스텀 훅
 │   │   │   └── useRecorder.ts      # 녹음/녹화 훅
 │   │   └── config/                  # 설정
-│   │       └── supabase.ts         # Supabase 클라이언트 설정
+│   │       └── firebase.ts         # Firebase 클라이언트 설정
 │   ├── package.json                # Node.js 종속성
 │   └── vite.config.ts              # Vite 빌드 설정
 │
@@ -269,7 +269,7 @@ genminute/
 사용자 계정 및 인증
 ```sql
 - id: INTEGER PRIMARY KEY AUTOINCREMENT
-- google_id: TEXT UNIQUE (Supabase Auth UID)
+- google_id: TEXT UNIQUE (Firebase Auth UID)
 - email: TEXT UNIQUE
 - name: TEXT
 - profile_picture: TEXT (URL)
@@ -331,7 +331,8 @@ Content: "### 주제\n* 포인트 1\n* 포인트 2..." 형식
 | 엔드포인트 | 메서드 | 인증 | 설명 |
 |----------|--------|------|------|
 | `/login` | GET | 불필요 | 로그인 페이지 표시 |
-| `/api/login` | POST | 불필요 | Supabase Access Token 검증 및 세션 생성 |
+| `/api/firebase-config` | GET | 불필요 | 프론트엔드용 Firebase 웹 설정 반환 |
+| `/api/login` | POST | 불필요 | Firebase ID 토큰 검증 및 세션 생성 |
 | `/api/logout` | POST | 불필요 | 세션 종료 |
 | `/api/me` | GET | 필수 | 현재 사용자 정보 조회 |
 
@@ -436,24 +437,32 @@ cp .env.example .env
 ```
 필수 변수(`config.validate()` 기준):
 - `FLASK_SECRET_KEY` — `python -c "import secrets; print(secrets.token_hex(32))"`
-- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — Supabase 대시보드 > Project Settings > API
+- `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID` — Firebase Console > 프로젝트 설정 > 일반 > 웹 앱 SDK 설정
 - `GOOGLE_API_KEY` — Gemini (STT/요약/회의록/챗봇)
 - `OPENAI_API_KEY` — 벡터 DB 임베딩 (`EMBEDDING_MODEL`)
 
 조건부 필수:
 - `HF_TOKEN` — `STT_ENGINE=local`일 때
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — `DB_TYPE=supabase`일 때
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Google Calendar 연동 사용 시
 
-프론트엔드(Vite) 빌드용: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL`
+프론트엔드(Vite) 빌드용: `VITE_API_BASE_URL`
 
-#### 2.3 Supabase 설정
-인증과 관계형 데이터는 Supabase(PostgreSQL)를 사용합니다.
-1. [Supabase](https://supabase.com) 프로젝트 생성
-2. Authentication > Providers에서 Google 로그인 활성화
-3. Project Settings > API에서 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY` 확인
-4. 테이블 스키마는 [docs/database/supabase_schema.sql](docs/database/supabase_schema.sql) 참조
+#### 2.3 Firebase 설정 (로그인 인증)
+로그인 인증은 DB 종류와 무관하게 Firebase Authentication을 사용합니다.
+1. [Firebase Console](https://console.firebase.google.com)에서 프로젝트 추가 (기존 GCP 프로젝트를 선택해 Firebase를 추가할 수 있음)
+2. Authentication > 로그인 방법에서 Google 제공업체 활성화
+3. Authentication > 설정 > 승인된 도메인에 접속 도메인 등록 (`localhost`는 기본 포함)
+4. 프로젝트 설정 > 일반에서 웹 앱을 등록하고 SDK 설정값을 `.env`의 `FIREBASE_*`에 입력
+5. 프로젝트 설정 > 서비스 계정 > 새 비공개 키 생성 → 프로젝트 루트에 `firebase-adminsdk.json`으로 저장
+   (다른 경로는 `FIREBASE_CREDENTIALS_PATH`로 지정, 이 파일은 커밋 금지)
 
-> 참고: `DB_TYPE=sqlite`로 설정하면 Supabase 없이 로컬 SQLite로도 구동할 수 있습니다(Repository 패턴).
+#### 2.4 데이터베이스
+기본값은 로컬 SQLite(`DB_TYPE=sqlite`, `database/minute_ai.db`)이며 추가 설정이 필요 없습니다.
+
+> 참고: `DB_TYPE=supabase`로 설정하면 Supabase(PostgreSQL)를 관계형 DB로 사용할 수 있습니다(Repository 패턴).
+> 이 경우 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`가 필요하며, 테이블 스키마는
+> [docs/database/supabase_schema.sql](docs/database/supabase_schema.sql)을 참조하세요.
 
 ### 3. 프론트엔드 빌드 및 실행
 
@@ -484,8 +493,8 @@ python app.py
 브라우저에서 `http://localhost:5000` 접속
 
 **참고:** 
+- 기본값(`DB_TYPE=sqlite`)에서 SQLite 테이블은 `app.py` 실행 시 자동 생성됩니다.
 - Supabase(`DB_TYPE=supabase`) 사용 시 테이블 스키마는 [docs/database/supabase_schema.sql](docs/database/supabase_schema.sql)을 Supabase SQL Editor에서 실행하여 준비합니다.
-- `DB_TYPE=sqlite` 사용 시 SQLite 테이블은 `app.py` 실행 시 자동 생성됩니다.
 - 프론트엔드는 빌드된 `dist` 폴더의 정적 파일을 Flask가 서빙합니다.
 - 개발 환경에서는 프론트엔드 개발 서버(`npm run dev`)와 백엔드 서버를 동시에 실행하고, 프록시 설정을 통해 연동할 수 있습니다.
 
@@ -645,8 +654,11 @@ FLASK_SECRET_KEY=<256비트 랜덤 hex>
 FLASK_DEBUG=False
 FLASK_PORT=5000
 
-SUPABASE_URL=<Supabase 프로젝트 URL>
-SUPABASE_SERVICE_ROLE_KEY=<Supabase Service Role Key>
+DB_TYPE=sqlite
+
+FIREBASE_API_KEY=<Firebase 웹 API 키>
+FIREBASE_AUTH_DOMAIN=<프로젝트ID>.firebaseapp.com
+FIREBASE_PROJECT_ID=<Firebase 프로젝트 ID>
 
 GOOGLE_API_KEY=<Google Gemini API 키>
 OPENAI_API_KEY=<OpenAI API 키 (임베딩)>
@@ -689,12 +701,12 @@ where ffmpeg  # Windows
 
 ### 2. DB 오류 (테이블 없음 등)
 ```bash
-# Supabase: docs/database/supabase_schema.sql 을 Supabase SQL Editor에서 실행했는지 확인
-
-# SQLite(DB_TYPE=sqlite) 사용 시: app.py 실행 시 자동 생성됨.
+# SQLite(기본값): app.py 실행 시 자동 생성됨.
 # 완전 재생성이 필요하면 DB 파일 삭제 후 재실행
 rm database/minute_ai.db
 python app.py
+
+# Supabase(DB_TYPE=supabase) 사용 시: docs/database/supabase_schema.sql 을 Supabase SQL Editor에서 실행했는지 확인
 ```
 
 ### 3. ChromaDB 오류
@@ -704,11 +716,12 @@ rm -rf database/vector_db
 python app.py  # 자동으로 재생성됨
 ```
 
-### 4. Supabase 인증 오류
+### 4. Firebase 인증 오류
 ```bash
-# .env의 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 설정 확인
-# 프론트엔드 .env의 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY 확인
-# Supabase 대시보드 > Authentication > Providers에서 Google 로그인 활성화 여부 확인
+# .env의 FIREBASE_* 값이 Firebase Console의 웹 앱 SDK 설정과 일치하는지 확인
+# 프로젝트 루트에 firebase-adminsdk.json(서비스 계정 키)이 있는지 확인
+# Firebase Console > Authentication에서 Google 로그인 활성화 및 승인된 도메인 확인
+# 로그인 버튼이 '초기화 중...'에서 멈추면 백엔드 /api/firebase-config 응답 확인
 ```
 
 ### 5. 프론트엔드 빌드 오류

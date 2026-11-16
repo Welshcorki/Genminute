@@ -24,7 +24,8 @@ gunicorn>=21.0,<23.0
 # -----------------------------------------
 # 3. Database & Auth
 # -----------------------------------------
-supabase>=2.0,<3.0
+firebase-admin>=6.0,<7.0  # 로그인 인증 (ID 토큰 검증)
+supabase>=2.0,<3.0        # DB_TYPE=supabase 일 때만 사용
 SQLAlchemy>=2.0,<3.0
 bcrypt>=5.0,<6.0
 cryptography>=41.0,<44.0

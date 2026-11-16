@@ -46,11 +46,17 @@ Route (Thin Controller: 입력 검증, Service 호출, 응답 변환만)
 
 Repository 메서드를 추가할 때: `interfaces.py`의 ABC에 먼저 추가한 뒤, `database/repositories/sqlite/`와 `database/repositories/supabase/` **양쪽 모두**에 구현하세요.
 
-### DB 백엔드는 교체 가능 — 그리고 기본값은 SQLite가 아니라 Supabase
+### DB 백엔드는 교체 가능 — 기본값은 SQLite
 
-`config.DB_TYPE`(env `DB_TYPE`, **기본값 `supabase`**)가 백엔드를 선택합니다. `database/__init__.py`의 `get_db_manager()`가 팩토리입니다: `supabase` → `SupabaseManager`, 그 외 → SQLite `DatabaseManager`. 일부 Service는 `DB_TYPE`에 따라 `app.py`에서 선택되는 병렬 구현을 가집니다(예: `AnalysisService` vs `SupabaseAnalysisService`, `UserService` vs `SupabaseUserService`).
+`config.DB_TYPE`(env `DB_TYPE`, **기본값 `sqlite`**)가 백엔드를 선택합니다. `database/__init__.py`의 `get_db_manager()`가 팩토리입니다: `supabase` → `SupabaseManager`, 그 외 → SQLite `DatabaseManager`. 일부 Service는 `DB_TYPE`에 따라 `app.py`에서 선택되는 병렬 구현을 가집니다(예: `AnalysisService` vs `SupabaseAnalysisService`, `UserService` vs `SupabaseUserService`).
 
-⚠️ `README.md`는 이 앱을 SQLite 기반으로 설명하고 Firebase 인증, `init_db.py` 등을 언급합니다. 상당 부분이 Supabase 마이그레이션과 Repository 리팩토링 이전 내용입니다 — 코드와 README가 다르면 **코드를 신뢰**하세요. `requirements.txt`, `config.py`, `app.py`가 권위 있는 출처입니다.
+Supabase 백엔드 코드는 유지되지만 현재 운영 DB는 아닙니다(계속 사용할지 미정, 2026-11 기준 Supabase 프로젝트 없음).
+
+### 인증은 Firebase — DB와 독립
+
+로그인은 `DB_TYPE`과 무관하게 Firebase Authentication을 사용합니다. 프론트엔드(`frontend/src/config/firebase.ts`)가 `/api/firebase-config`로 웹 설정을 받아 Google 팝업 로그인 후 ID 토큰을 `/api/login`에 보내고, 백엔드(`services/firebase_service.py`)가 Admin SDK로 검증해 Flask 세션을 만듭니다. 서비스 계정 키는 `config.FIREBASE_CREDENTIALS_PATH`(기본: 루트의 `firebase-adminsdk.json`, 커밋 금지)입니다.
+
+코드와 README가 다르면 **코드를 신뢰**하세요. `requirements.txt`, `config.py`, `app.py`가 권위 있는 출처입니다.
 
 ### STT 엔진도 교체 가능
 
@@ -89,4 +95,4 @@ Blueprint는 `routes/__init__.py`의 `register_blueprints()`에서 등록됩니�
 
 ## 환경 변수
 
-설정은 `config.py`에 중앙화되어 있습니다(`.env` 로드); `.env.example` 참조. 필수 변수는 `DB_TYPE`/`STT_ENGINE`에 따라 달라지며 `config.validate()`가 이를 열거합니다(항상 필수: `FLASK_SECRET_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`). 모든 영상/녹음 업로드에는 PATH에 ffmpeg가 필요합니다.
+설정은 `config.py`에 중앙화되어 있습니다(`.env` 로드); `.env.example` 참조. 필수 변수는 `DB_TYPE`/`STT_ENGINE`에 따라 달라지며 `config.validate()`가 이를 열거합니다(항상 필수: `FLASK_SECRET_KEY`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`; `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`는 `DB_TYPE=supabase`일 때만). 모든 영상/녹음 업로드에는 PATH에 ffmpeg가 필요합니다.

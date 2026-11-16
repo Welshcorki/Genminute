@@ -6,12 +6,26 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 import logging
 
 from config import config
-from services.supabase_service import verify_access_token
+from services.firebase_service import verify_id_token
 from services.user_service import get_or_create_user
 from utils.decorators import login_required
 
 auth_bp = Blueprint('auth', __name__)
 logger = logging.getLogger(__name__)
+
+
+@auth_bp.route("/api/firebase-config", methods=["GET"])
+def get_firebase_config():
+    """
+    Firebase 클라이언트 설정 반환 (프론트엔드 SDK 초기화용)
+
+    Returns:
+        JSON: Firebase 설정 객체
+    """
+    return jsonify({
+        'success': True,
+        'config': config.get_firebase_config()
+    })
 
 
 @auth_bp.route("/login")
@@ -32,11 +46,11 @@ def login_page():
 @auth_bp.route("/api/login", methods=["POST"])
 def login():
     """
-    Supabase Access Token을 받아 세션 생성
+    Firebase ID 토큰을 받아 세션 생성
 
     Request JSON:
         {
-            "accessToken": "Supabase Access Token"
+            "idToken": "Firebase ID 토큰"
         }
 
     Returns:
@@ -44,16 +58,16 @@ def login():
     """
     try:
         data = request.get_json()
-        access_token = data.get('accessToken')
+        id_token = data.get('idToken')
 
-        if not access_token:
+        if not id_token:
             return jsonify({
                 'success': False,
-                'error': 'Access Token이 필요합니다.'
+                'error': 'ID 토큰이 필요합니다.'
             }), 400
 
-        # Supabase Access Token 검증
-        user_info = verify_access_token(access_token)
+        # Firebase ID 토큰 검증
+        user_info = verify_id_token(id_token)
 
         if not user_info:
             return jsonify({

@@ -1876,3 +1876,39 @@ import type { UploadProgress } from '../services/upload';
 - PRD §13(결정 완료), 로드맵 Phase 5(비용 최적화), docs 인덱스에 연결
 
 ---
+---
+
+## 2026년 11월 16일 - 마이그레이션: 기본 DB를 SQLite로 전환, 인증을 Firebase로 복원
+
+### 1. 목표 (무엇을·왜)
+- Supabase 프로젝트가 삭제되어 DB와 로그인(Supabase Auth)이 모두 동작하지 않는 상태 → 앱을 다시 구동 가능하게 만든다.
+- 리팩토링(구조 정리)에 앞선 **마이그레이션** 단계. 이후 순서: 버그 수정 → 스모크 테스트 → 리팩토링 → 관리자 페이지 React 재구현.
+
+### 2. 주요 변경 사항 (어떻게)
+- **DB**: `config.DB_TYPE` 기본값 `supabase` → `sqlite`. Supabase 백엔드 코드(repo/서비스)는 유지(계속 사용 여부 미정).
+- **인증**: Supabase Auth → Firebase Authentication. 삭제됐던 코드(커밋 `86b87de` 이전)를 현재 파일에 이식(단순 revert 아님 — 이후 디자인 시스템 변경 보존).
+  - 백엔드: `services/firebase_service.py` 복원(키 경로를 `config.FIREBASE_CREDENTIALS_PATH`로 분리, 지연 초기화), `routes/auth.py`에 `/api/firebase-config` 복원 및 `/api/login`이 `idToken` 수신, `services/supabase_service.py` 삭제.
+  - 프론트: `config/firebase.ts` 복원, `AuthContext.tsx`·`Login.tsx`를 Firebase 팝업 로그인으로 전환, `/auth/callback` 라우트와 `config/supabase.ts` 삭제, `@supabase/supabase-js` → `firebase`.
+- **설정 검증**: `config.validate()`가 Firebase 웹 설정 3종을 항상 필수로, Supabase 변수는 `DB_TYPE=supabase`일 때만 요구.
+- **문서**: `.env.example`, `README.md`, `CLAUDE.md` 정정.
+
+### 3. 변경 파일
+`config.py`, `requirements.txt`, `.env.example`, `routes/auth.py`, `services/firebase_service.py`(신규), `services/supabase_service.py`(삭제),
+`frontend/src/config/firebase.ts`(신규), `frontend/src/config/supabase.ts`(삭제), `frontend/src/contexts/AuthContext.tsx`,
+`frontend/src/pages/Login.tsx`, `frontend/src/services/auth.ts`, `frontend/src/App.tsx`, `frontend/package.json`, `tests/test_auth.py`(신규)
+
+### 4. 주요 결정 및 이유
+- **Firebase를 기존 GCP 프로젝트에 추가**(별도 프로젝트 X): Calendar OAuth와 동의 화면·도메인 관리를 한 곳에서. 1인 운영 규모.
+- **Firebase 웹 설정은 백엔드가 전달**(`/api/firebase-config`): 기존 `.env`의 `FIREBASE_*` 키 이름과 검증된 옛 구조를 그대로 사용.
+- **Admin SDK 지연 초기화**: 서비스 계정 키가 없어도 앱은 부팅되고, 로그인 시도만 401로 거부(fail-closed).
+
+### 5. 검증
+- `tests/test_auth.py` 14건 추가(토큰 검증 성공/무효/만료/키 없음, 로그인 라우트, 설정 검증) — 전체 35건 통과(`genminute_stt` 환경).
+- 실제 앱 부팅(SQLite): `/api/firebase-config` 200, `/api/me` 401, 잘못된 토큰 로그인 401 확인.
+- 프론트 `npm run build` 통과. lint 오류 2건은 변경 전과 동일(기존).
+
+### 6. 알려진 이슈 / 남은 일
+- **실제 Google 로그인은 미검증**: Firebase 프로젝트 생성과 `.env`의 `FIREBASE_*` 값 교체, `firebase-adminsdk.json` 배치가 필요(사용자 작업). 현재 `.env` 값은 삭제된 옛 프로젝트 것.
+- 로컬 `minute_ai.db`는 2026-04 시점 데이터. Supabase 시절 회의는 복구 불가이며, ChromaDB에 해당 회의의 벡터가 남아 있을 수 있음(검색에는 접근 권한 필터로 노출되지 않음).
+- 레거시 템플릿 `templates/login.html`은 Firebase 설정을 받지 못함 — 다음 단계(레거시 페이지 라우트 제거)에서 해소 예정.
+- `gunicorn_config.py` 기본 워커 4개(`GUNICORN_WORKERS`) + SQLite 조합은 동시 쓰기 시 잠금 대기가 생길 수 있음 — 프로덕션 배포 전 워커 수 검토 필요.

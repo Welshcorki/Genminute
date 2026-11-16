@@ -25,8 +25,8 @@ class Config:
     DATABASE_FOLDER = BASE_DIR / "database"
     DATABASE_PATH = DATABASE_FOLDER / "minute_ai.db"
     
-    # 사용할 데이터베이스 타입: 'sqlite' 또는 'supabase' (기본값: supabase)
-    DB_TYPE: str = os.getenv('DB_TYPE', 'supabase').lower()
+    # 사용할 데이터베이스 타입: 'sqlite' 또는 'supabase' (기본값: sqlite)
+    DB_TYPE: str = os.getenv('DB_TYPE', 'sqlite').lower()
     
     FRONTEND_BUILD_DIR = BASE_DIR / "frontend" / "dist"  # React 빌드 파일 경로
 
@@ -44,7 +44,21 @@ class Config:
     # 미설정 시 첫 번째 허용 오리진으로 폴백 (개발 환경: http://localhost:5173)
     FRONTEND_URL: str = os.getenv('FRONTEND_URL', '') or (ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else 'http://localhost:5173')
 
-    # ==================== Supabase 설정 ====================
+    # ==================== Firebase 설정 (인증) ====================
+    # 프론트엔드 Firebase SDK용 웹 설정 (GET /api/firebase-config 로 전달)
+    FIREBASE_API_KEY: str = os.getenv('FIREBASE_API_KEY', '')
+    FIREBASE_AUTH_DOMAIN: str = os.getenv('FIREBASE_AUTH_DOMAIN', '')
+    FIREBASE_PROJECT_ID: str = os.getenv('FIREBASE_PROJECT_ID', '')
+    FIREBASE_STORAGE_BUCKET: str = os.getenv('FIREBASE_STORAGE_BUCKET', '')
+    FIREBASE_MESSAGING_SENDER_ID: str = os.getenv('FIREBASE_MESSAGING_SENDER_ID', '')
+    FIREBASE_APP_ID: str = os.getenv('FIREBASE_APP_ID', '')
+    FIREBASE_MEASUREMENT_ID: str = os.getenv('FIREBASE_MEASUREMENT_ID', '')
+    # 백엔드 ID 토큰 검증용 서비스 계정 키 파일 (기본: 프로젝트 루트의 firebase-adminsdk.json)
+    FIREBASE_CREDENTIALS_PATH: Path = Path(
+        os.getenv('FIREBASE_CREDENTIALS_PATH', '') or (BASE_DIR / 'firebase-adminsdk.json')
+    )
+
+    # ==================== Supabase 설정 (DB_TYPE=supabase 일 때만 사용) ====================
     SUPABASE_URL: str = os.getenv('SUPABASE_URL', '')
     SUPABASE_ANON_KEY: str = os.getenv('SUPABASE_ANON_KEY', '')
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
@@ -104,12 +118,27 @@ class Config:
 
 
     @classmethod
+    def get_firebase_config(cls) -> dict[str, str]:
+        """Firebase 클라이언트(웹) 설정 반환 — 프론트엔드 SDK 초기화용"""
+        return {
+            'apiKey': cls.FIREBASE_API_KEY,
+            'authDomain': cls.FIREBASE_AUTH_DOMAIN,
+            'projectId': cls.FIREBASE_PROJECT_ID,
+            'storageBucket': cls.FIREBASE_STORAGE_BUCKET,
+            'messagingSenderId': cls.FIREBASE_MESSAGING_SENDER_ID,
+            'appId': cls.FIREBASE_APP_ID,
+            'measurementId': cls.FIREBASE_MEASUREMENT_ID,
+        }
+
+    @classmethod
     def validate(cls) -> tuple[bool, list[str]]:
         """
         필수 환경 변수 검증
 
-        필수: FLASK_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY, GOOGLE_API_KEY
+        필수: FLASK_SECRET_KEY, FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID,
+              OPENAI_API_KEY, GOOGLE_API_KEY
         조건부:
+          - SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY: DB_TYPE=supabase 일 때만 필수
           - HF_TOKEN: STT_ENGINE=local 일 때만 필수
           - GOOGLE_CLIENT_ID/SECRET: 캘린더 연동 사용 시 필수
 
@@ -119,11 +148,19 @@ class Config:
         # 항상 필수인 변수
         required_vars = [
             ('FLASK_SECRET_KEY', cls.SECRET_KEY),
-            ('SUPABASE_URL', cls.SUPABASE_URL),
-            ('SUPABASE_SERVICE_ROLE_KEY', cls.SUPABASE_SERVICE_ROLE_KEY),
+            ('FIREBASE_API_KEY', cls.FIREBASE_API_KEY),
+            ('FIREBASE_AUTH_DOMAIN', cls.FIREBASE_AUTH_DOMAIN),
+            ('FIREBASE_PROJECT_ID', cls.FIREBASE_PROJECT_ID),
             ('OPENAI_API_KEY', cls.OPENAI_API_KEY),
             ('GOOGLE_API_KEY', cls.GOOGLE_API_KEY),
         ]
+
+        # 조건부 필수 변수 (DB_TYPE=supabase 일 때)
+        if cls.DB_TYPE == 'supabase':
+            required_vars += [
+                ('SUPABASE_URL', cls.SUPABASE_URL),
+                ('SUPABASE_SERVICE_ROLE_KEY', cls.SUPABASE_SERVICE_ROLE_KEY),
+            ]
 
         # 조건부 필수 변수 (STT_ENGINE=local 일 때)
         if cls.STT_ENGINE == 'local':
@@ -185,8 +222,12 @@ class Config:
 
         print("🔑 API 키 상태:")
         print(f"   Flask Secret Key:       {mask_key(cls.SECRET_KEY, show_secrets)}")
-        print(f"   Supabase URL:           {mask_key(cls.SUPABASE_URL, show_secrets)}")
-        print(f"   Supabase Service Key:   {mask_key(cls.SUPABASE_SERVICE_ROLE_KEY, show_secrets)}")
+        print(f"   Firebase API Key:       {mask_key(cls.FIREBASE_API_KEY, show_secrets)}")
+        print(f"   Firebase 서비스 계정:   {'✅ 있음' if cls.FIREBASE_CREDENTIALS_PATH.exists() else '❌ 없음'}")
+        print(f"   DB 타입:                {cls.DB_TYPE}")
+        if cls.DB_TYPE == 'supabase':
+            print(f"   Supabase URL:           {mask_key(cls.SUPABASE_URL, show_secrets)}")
+            print(f"   Supabase Service Key:   {mask_key(cls.SUPABASE_SERVICE_ROLE_KEY, show_secrets)}")
         print(f"   OpenAI API Key:         {mask_key(cls.OPENAI_API_KEY, show_secrets)}")
         print(f"   Google API Key:         {mask_key(cls.GOOGLE_API_KEY, show_secrets)}")
         print(f"   Hugging Face:           {mask_key(cls.HF_TOKEN, show_secrets)}")
