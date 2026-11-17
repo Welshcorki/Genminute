@@ -13,6 +13,7 @@ docs/
 ├── development/         # 개발 관련
 │   ├── roadmap.md
 │   ├── dev_log.md
+│   ├── decision_log.md  # 결정 카드 (포트폴리오 재료, /devlog로 추가)
 │   ├── judgment_log_priority2.md
 │   ├── learning_points.md
 │   ├── refactoring_history.md
