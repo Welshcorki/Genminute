@@ -2062,3 +2062,61 @@ import type { UploadProgress } from '../services/upload';
 - optimum-intel 2.1.0 이상이 transformers `>=4.51,<5.6`을 지원 → 설치된 5.3.0과 호환. 단 openvino `>=2026.0` 필요(현재 2025.4.0).
 - 설치 시뮬레이션: `optimum-intel[openvino]==2.2.0` → optimum 2.3.0, openvino 2026.4.1, nncf 3.4.0, openvino-tokenizers, torchvision 0.20.1 설치. torch·transformers·numpy는 유지. 충돌 없음.
 - 적용 시 `STT_BACKEND=auto`가 OpenVINO를 감지해 **STT 백엔드가 faster-whisper(CPU) → OpenVINO(Intel GPU, distil-large-v3)로 바뀜** — 인식 결과가 달라질 수 있어 실제 음성 테스트와 함께 진행 필요.
+
+---
+
+## 2026년 11월 19일 - 리팩토링 이후 계획: 저장소·단계 배치·Supabase 삭제 결정 (코드 변경 없음)
+
+### 1. 목표 (무엇을·왜)
+- 리팩토링(다른 세션에서 진행 중) 이후 작업 계획을 설계한다. 이 세션은 코드 수정 금지, 계획 문서만 작성.
+- 배포가 Cloud Run 방향이 되면서 저장소(SQLite·ChromaDB·`uploads/`)를 어디로 옮길지와 단계 순서를 정해야 했다.
+
+### 2. 주요 변경 사항 (어떻게)
+- **계획 문서**: `docs/development/post_refactoring_plan_handoff.md` 신규 (커밋 `f1d6a27`, 323줄). 이후 2단계 확정 반영 3줄 수정은 커밋 전.
+- 코드·설정·의존성 변경 없음.
+
+### 3. 주요 결정 및 이유
+- **저장소 = Firestore(+벡터 검색) + Cloud Storage for Firebase, 리전 `us-central1`**: Cloud Run 리전과 맞추고, GPU가 필요해질 가능성(로컬 STT 서버 실행)을 남기기 위함(사용자 발언). 새 구현체(`database/repositories/firestore/`)로 추가 → decision_log `D-002`
+- **Supabase 코드 삭제 + 2단계 범위를 "서비스의 DB 호출을 repo로 이동"으로 변경**: Supabase는 운영 DB가 아니고, 필요해지면 설정에 맞춰 다시 짠다(사용자 발언). `services/user_service.py`에 DB 직접 호출 36곳, `services/analysis_service.py`에 4곳 → decision_log `D-003`
+- **단계 배치**: Firebase 이전은 2단계 직후(3·4단계가 저장 방식에 따라 구현이 달라짐), 자체 캘린더 → 간트는 7단계 직후.
+- **요약 인용을 실제 출처로('나'안)**: 전사문에 `[번호] 화자 N: 발언`을 붙여 보내고 화면에서 해당 발언으로 이동. 요약 프롬프트(`subtopic_generate`) 수정 승인 포함 → decision_log `D-004`
+- **기타 확정**: 원본 보관 기본 14일 + 회의별 즉시 삭제 버튼, ogg·opus는 m4a로 변환, 동의·고지 3겹(첫 로그인·업로드 시·공유 시), 비교 테스트는 우선 30분 이내 파일로, 브랜치는 `cleanup`에서 작업 후 단계마다 `main` 머지.
+
+### 4. 검증
+- 단위 테스트·빌드: 실행하지 않음(코드 변경 없음).
+- 근거로 쓴 코드 확인: `connection.py`에 `meetings` 테이블 없음(회의 정보가 발언 행마다 반복), 주제별 요약은 벡터 DB에만 저장, ID는 정수 자동 증가 — Firestore 이전 시 손볼 7건으로 계획 문서에 기록.
+- Supabase 언급: grep 기준 22개 파일 125곳(문서 포함 여부는 계획 문서 참조).
+
+### 5. 알려진 이슈 / 남은 일
+- 결정 대기: `self_query` 검색 방식 삭제(사용자가 코드 확인 후 결정), 서버 임베딩(EmbeddingGemma 2 vs `gemini-embedding-2`), 0단계 실행 주체, 배포 STT 엔진, 도메인.
+- 미검증: Firestore 벡터 검색에서 "접근 가능한 회의 ID 목록" 필터의 값 개수 제한(공식 문서 미확인). Cloud Run·Storage·Firestore 리전별 단가는 가격 페이지 조회 실패로 미확인.
+- 미측정: 회의 1건당 API 비용(약 $0.07~0.11은 토큰 추정치이며 실측 아님).
+- 커밋 `3d617be`(/devlog 도입)는 이번 기록 범위 밖이라 기록하지 않음.
+
+---
+
+## 2026년 11월 19일 - 0단계 사전 확인: Gemini 키·모델, 패키지 사용처 조사 (코드 변경 없음)
+
+### 1. 목표 (무엇을·왜)
+- 0단계(실제 업로드 1회 검증) 전에 LLM 호출이 가능한 상태인지, 서버에서 뺄 수 있는 패키지가 무엇인지 확인한다.
+
+### 2. 주요 변경 사항 (어떻게)
+- 확인 스크립트 2개를 세션 임시 폴더에 작성해 실행(레포에 추가하지 않음). 키 값은 출력하지 않음.
+- 결과는 계획 문서 0단계·"추가 단계 C"에 기록(커밋 `f1d6a27`).
+
+### 3. 주요 결정 및 이유
+- **`GOOGLE_API_KEY`는 변수 이름 유지, 값만 교체**: AI Studio의 키 이름은 표시용 라벨이라 코드 변경 불필요. 사용자가 프로젝트 `genminute-492814` 가져오기로 발급해 교체함.
+- **비교 테스트 모델 후보**: 전사 3종(로컬 / Gemini flash / `gemini-3.5-transcribe`), 전사 외 2종(`gemini-3.6-flash` / `gemini-3.8-flash`). 테스트 파일은 `uploads/1차회의_stt선정_251105_160414.m4a`(4분 36초, 4인).
+
+### 4. 검증
+- 교체 전 키: 400 "API key not valid".
+- 교체 후 키: 모델 목록 조회 성공(64개). `gemini-3-flash`(코드 기본값, `config.py:94`) → 404. `gemini-3.6-flash`·`gemini-3.8-flash` → 각 4회 모두 503(혼잡) — **호출 성공 미검증**. `gemini-3.5-transcribe` → 텍스트 1토큰 `generateContent` 성공(음성 호출 미검증).
+- 설치된 `google-genai` 1.52.0에 `client.interactions` 없음.
+- 패키지 사용처(설치 메타데이터 + import 분석, `requirements.txt` 45개): 직접 쓰지 않고 다른 필수 패키지도 요구하지 않음 → `graphviz`, `pydot`, `pandas`, `langchain`, `langchain-community`(`self_query`가 내부에서 사용). `torchaudio`는 직접 import 없음(pyannote가 요구). 실제로 빼고 실행하는 검증은 미실행.
+- `pip check`: `optimum-intel`·`optimum-onnx`가 transformers `<4.56`을 요구하나 5.3.0 설치됨.
+
+### 5. 알려진 이슈 / 남은 일
+- `gemini-3.6/3.8-flash` 호출 재시도 필요. 0단계 전 `.env`에 `GEMINI_MODEL` 지정 필요.
+- 문서 불일치: `requirements.txt`의 `huggingface_hub<0.20` ↔ 설치 환경 1.7.1.
+- 문서 불일치: `routes/google_auth.py` 주석 "로그인은 Supabase Auth" ↔ 실제 로그인 `services/firebase_service.py`(Firebase).
+- 문서 불일치: `requirements.txt` 주석 "마인드맵"용 `pydot`·`graphviz` ↔ 프로젝트 코드에 import 없음.

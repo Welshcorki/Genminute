@@ -17,7 +17,7 @@
 |---|---|---|
 | 0 | 실제 업로드 1회 검증 | 계획 확정, **실행 주체 미정** |
 | 1 | 업로드·회의록·챗봇 테스트 + 원본 파일 접근 제한 | 계획 확정 |
-| 2 | 서비스 통합 | 계획 확정 (Supabase 코드 삭제 확정 2026-11-19, 범위 변경 제안 중) |
+| 2 | 서비스 통합 | 계획 확정 (Supabase 코드 삭제 + 서비스의 DB 호출을 repo로 이동, 2026-11-19) |
 | 2-A | 저장소를 Firebase로 이전 | 방향 확정 (Firestore, `us-central1`) |
 | 3 | 처리 비동기화 | 사용자 승인 |
 | 4 | 파일 처리 정리 | 방향 확정, 세부 2건 미정 |
@@ -78,7 +78,7 @@
     - 주석 정정: [routes/google_auth.py](../../routes/google_auth.py)의 "Supabase Auth로 전환" 주석 4곳(실제 로그인은 Firebase)
     - 문서: `CLAUDE.md`, `README.md`의 Supabase 설명(9단계 문서 정리 때 함께)
     - `DB_TYPE` 설정 자체는 남긴다. Firestore 구현이 들어오면 `sqlite`/`firestore` 선택에 다시 쓴다.
-  - **변경 제안 (2026-11-17, Firestore 결정에 따름 — 사용자 확인 필요)**: 배포 DB가 Firestore로 정해져 Supabase 서비스를 합치는 작업은 의미가 없어졌다. 대신 서비스 안의 SQL을 repo로 옮긴다. 현재 [services/user_service.py](../../services/user_service.py)에 DB 직접 호출이 36곳, [services/analysis_service.py](../../services/analysis_service.py)에 4곳 있고, `UserRepositoryInterface`에는 메서드가 2개뿐이다(사용자 조회·생성·공유·권한 확인이 인터페이스 밖에 있음). 이것을 인터페이스로 올려야 Firestore 구현을 하나만 더 쓰면 되고, 그렇지 않으면 `FirestoreUserService`라는 3번째 복제본이 생긴다.
+  - **서비스 안의 DB 호출을 repo로 옮기기 (사용자 확정 2026-11-19, 2026-11-17 제안)**: 배포 DB가 Firestore로 정해져 Supabase 서비스를 합치는 작업은 의미가 없어졌다. 대신 서비스 안의 SQL을 repo로 옮긴다. 현재 [services/user_service.py](../../services/user_service.py)에 DB 직접 호출이 36곳, [services/analysis_service.py](../../services/analysis_service.py)에 4곳 있고, `UserRepositoryInterface`에는 메서드가 2개뿐이다(사용자 조회·생성·공유·권한 확인이 인터페이스 밖에 있음). 이것을 인터페이스로 올려야 Firestore 구현을 하나만 더 쓰면 되고, 그렇지 않으면 `FirestoreUserService`라는 3번째 복제본이 생긴다.
   - 기존 합의에 있던 Facade 위임 정리, repo ↔ `vdb_manager` 순환 참조 해소.
 - **건드릴 파일**
   - 라우트: [routes/admin.py](../../routes/admin.py), [routes/google_auth.py](../../routes/google_auth.py), [routes/meetings.py](../../routes/meetings.py), [routes/meetings_action_items.py](../../routes/meetings_action_items.py), [routes/summary.py](../../routes/summary.py), [routes/chat.py](../../routes/chat.py)
@@ -250,7 +250,7 @@
 | 12 | ~~캘린더·간트 순서~~ | **확정: 캘린더 → 간트** (2026-11-17) | 1절 "추가 단계 B". 단계 번호 배치는 미정 |
 | 13 | ~~추가 단계 A·B의 위치~~ | **확정: A(Firebase)는 2단계 직후, B(캘린더→간트)는 7단계 직후** (2026-11-19) | C(패키지 정리)는 작성자 제안대로 A와 함께 진행 — 미확인 |
 | 15 | **`self_query` 검색 방식 삭제** | 삭제 / 유지 | 사용자 보류(2026-11-19, 코드를 아직 보지 않음). 삭제 시 `langchain-classic`·`langchain-community`와 OpenAI 채팅 모델 연결이 함께 빠진다 |
-| 16 | **2단계 범위 변경** | 서비스 안의 DB 호출을 repo로 옮기기 / 원래대로 | 사용자가 재설명 요청(2026-11-19) |
+| 16 | ~~2단계 범위 변경~~ | **확정: 서비스 안의 DB 호출을 repo로 옮기기** (2026-11-19) | Supabase 삭제와 함께 2단계에서 진행. 2-A(Firestore)는 repo 구현만 추가하면 되게 하는 것이 목적 |
 | 14 | **서버 임베딩** | EmbeddingGemma 2(양자화) / `gemini-embedding-2` API | 로컬 한국어 검색 비교 후 결정 |
 | 3 | **배포 환경의 STT 엔진** | Gemini STT 사용 / 로컬 STT 유지(이 경우 GPU 서버 필요) | VM(GPU 없는 사양)과 Cloud Run 모두 로컬 STT가 사실상 불가. Gemini STT는 원본이 Google API로 전송되어 프라이버시 목적과 관련된다 |
 | 4 | **도메인 보유 여부** | 있음 / 구매 / 무료 도메인 | VM과 Tunnel 방식에 필요. Cloud Run은 불필요 |
