@@ -2120,3 +2120,35 @@ import type { UploadProgress } from '../services/upload';
 - 문서 불일치: `requirements.txt`의 `huggingface_hub<0.20` ↔ 설치 환경 1.7.1.
 - 문서 불일치: `routes/google_auth.py` 주석 "로그인은 Supabase Auth" ↔ 실제 로그인 `services/firebase_service.py`(Firebase).
 - 문서 불일치: `requirements.txt` 주석 "마인드맵"용 `pydot`·`graphviz` ↔ 프로젝트 코드에 import 없음.
+
+---
+
+## 2026년 11월 20일 - 배포 방식·관리자 인증 확정, 모델 가격 재정리 (코드 변경 없음)
+
+### 1. 목표 (무엇을·왜)
+- 8단계(배포)의 방식과 절차를 정하고, 0단계 비교 테스트의 모델 후보와 비용 기준을 공식 가격으로 다시 맞춘다.
+
+### 2. 주요 변경 사항 (어떻게)
+- **계획 문서**: `docs/development/post_refactoring_plan_handoff.md` 수정 48줄 추가·7줄 삭제(커밋 전). 8단계 배포 절차, 0단계 모델 후보·예상 비용표, 결제 전환 절차, 2절 1·4·14·17번, 3절 버린 안 3건.
+- **기록 커밋**: `85641c6`(dev_log·decision_log·인계 문서), `4361798`(`decision_log.md`의 D-002~D-004 "내 이유", 사용자 작성). 메시지와 실제 변경 파일 일치.
+- 코드·설정·의존성 변경 없음.
+
+### 3. 주요 결정 및 이유
+- **배포 = Firestore + Firebase Hosting + Cloud Run(`us-central1`)**: 이 PC의 Docker Desktop은 GenMinute에 쓰지 않고 사용자의 다른 개인 앱용으로만 쓴다(사용자 발언) → decision_log `D-005`
+- **배포 시 Firebase 관리자 인증 = ADC + 전용 서비스 계정**: 키 파일을 Secret Manager에 넣는 안과 비교 후 확정 → decision_log `D-006`
+- **`.dockerignore` 필수**: 사용자 확정. `.env`, `firebase-adminsdk.json`, 로컬 데이터가 이미지에 들어가지 않게 한다.
+- **전사 외 비교 후보에 `gemini-4-hydrogen` 추가**: 사용자 결정("결과를 보고 결정"). `gemini-4-neon`은 무료 등급이 없고 hydrogen의 2배 가격이라 제외.
+- **임베딩**: EmbeddingGemma 2와 `gemini-embedding-2`를 테스트 후 결정(사용자 확정). Firestore 벡터 색인 차원 때문에 2-A 전에 정해야 한다.
+- **토큰 사용량 기록**: 검토만 함(사용자 요청 "반영하진 말고"). 계획 문서에 넣지 않음, `결정 대기`.
+
+### 4. 검증
+- Gemini 호출(2026-11-19): 모델 목록 65개 조회 성공. `gemini-3.6-flash`·`gemini-3.8-flash`·`gemini-4-hydrogen` → 503, `gemini-4-neon` → 429("quota 초과, 요금제·결제 확인"), `gemini-3.5-transcribe` → 텍스트 1토큰 성공. 결제 미연결 상태(사용자 확인).
+- 키 파일 상태: `git check-ignore`로 `.gitignore:226` 확인, `git log --all`에 `firebase-adminsdk.json` 커밋 기록 없음, `.dockerignore` 없음.
+- 공식 문서 확인: IAM "All use of Identity and Access Management API is free of charge.", Cloud Run 기본 서비스 계정의 Editor 권한 경고와 전용 계정 권장, AI Studio 결제 등급표(Tier 1 지출 상한 $250), 모델별 가격(3.6·3.8 flash $0.75/$3.75 → 2027-01-01부터 $1.50/$7.50, hydrogen $1.50/$7.50).
+- 회의 1건당 비용표($0.033~0.126)는 공식 단가 × 추정 사용량. `미측정`.
+
+### 5. 알려진 이슈 / 남은 일
+- `미검증`: 3.6·3.8 flash·hydrogen 호출 성공, 503 원인이 무료 등급이라는 점(추정). 결제 연결 후 재확인.
+- `미확인`: Cloud Run·Cloud Logging·Firestore 무료 한도 초과 단가(가격 페이지 조회 실패), 로컬 ADC의 할당량 프로젝트가 청구에 주는 영향.
+- 결정 대기: 0단계 실행 주체, `self_query` 삭제, 토큰 사용량 기록 도입, 서버 임베딩.
+- 문서 불일치: `CLAUDE.md`의 "Supabase 백엔드 코드는 유지" ↔ 계획 문서의 Supabase 삭제 확정(코드는 아직 그대로, 9단계 문서 정리 대상).

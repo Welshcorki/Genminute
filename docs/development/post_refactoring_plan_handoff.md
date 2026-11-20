@@ -6,6 +6,7 @@
 | 근거 | 2026-11-16 ~ 17 계획 검토 대화 (코드 변경 없음, 검토만 진행) |
 | 기준 커밋 | `b88c8ff` — `main`, `cleanup`, `origin/main`, `origin/cleanup`이 모두 이 커밋 |
 | 테스트 | `genminute_stt` 환경에서 전체 91건 통과 (2026-11-16 실행) |
+| 작업 흐름 | 0~2단계(리팩토링)는 Claude Code 세션 "프로젝트 폴더 구조 리팩토링 계획"에서 진행 중이다. 이 문서의 계획 대화가 끝나면 그 세션으로 돌아가 이어 간다. 그 세션에서 파일을 옮기면 이 문서의 파일 링크·줄 번호도 함께 고친다 |
 
 표기 규칙: 대화에서 실제로 확인하거나 결정한 내용만 적었다. 대화에서 다루지 않아 작성자가 채운 부분은 **(추정)** 으로 표시했다.
 
@@ -25,7 +26,7 @@
 | 6 | 화자 이름 지정 | 사용자 승인 (신규) |
 | 7 | 회의록 템플릿 개선 | 사용자 승인 (AI 파이프라인 수정 예외) |
 | 7-B | 자체 캘린더 → 간트 차트 | 순서 확정 |
-| 8 | 배포 + HTTPS | **방식 미정** |
+| 8 | 배포 + HTTPS | 방식 확정 (Firestore + Hosting + Cloud Run, `us-central1`), 세부 절차는 제안 |
 | 9 | 관리자 페이지 React 재구현 → 레거시 철거 → 프론트 정리 → 문서 | 기존 합의 유지 |
 | 보류 | PWA, 네이티브 앱 | 정식 서비스 배포 시점에 재검토 |
 
@@ -46,13 +47,30 @@
   - `.env`의 `GOOGLE_API_KEY`가 무효다(Google이 "API key not valid"로 거절). 결제 연결된 프로젝트에서 새 키를 발급해 교체한다(사용자 작업).
   - 코드 기본값 `gemini-3-flash`는 공식 문서에 없는 모델명이다. `GEMINI_MODEL`을 실제 모델명으로 지정한다(후보: `gemini-3.8-flash`, `gemini-3.6-flash` — 가격 동일).
   - 캘린더 자동 등록을 끈다(사용자 결정). 할 일은 앱 DB에만 저장한다. **(추정)** `config.py`에 설정값을 두고 [tools/google_calendar_tool.py](../../tools/google_calendar_tool.py)에서 API 호출을 건너뛰면 `agent_service.py`를 건드리지 않고 끌 수 있다. 다시 켤지는 자체 캘린더 안이 확정된 뒤 논의한다.
-  - **키 교체 후 재확인 (2026-11-17)**: 사용자가 `GOOGLE_API_KEY` 값을 교체했고(프로젝트 `genminute-492814`에서 가져온 키, 변수 이름은 그대로) 모델 목록 조회가 성공했다. `gemini-3-flash`는 404(없는 모델)로 확정. 목록에 `gemini-3.6-flash`, `gemini-3.8-flash`, `gemini-3.5-transcribe`, `gemini-embedding-2`가 있다. `gemini-3.5-transcribe`는 목록상 `generateContent`를 지원한다고 나온다(공식 문서의 "Interactions API" 설명과 다름). 글자 한 단어짜리 `generateContent` 호출은 `gemini-3.5-transcribe`에서 성공했다(음성 호출은 미확인). `gemini-3.6-flash`와 `gemini-3.8-flash`는 4회씩 모두 503("high demand", 일시 혼잡)이라 **호출 성공을 아직 확인하지 못했다** — 키·결제 오류(400/403)는 아니다. 0단계 전에 재시도 필요. 설치된 `google-genai` 1.52.0에는 `client.interactions`가 없어, Interactions 방식이 필요하면 복제 환경에서 SDK를 올려야 한다.
+  - **키 교체 후 재확인 (2026-11-17)**: 사용자가 `GOOGLE_API_KEY` 값을 교체했고(프로젝트 `genminute-492814`에서 가져온 키, 변수 이름은 그대로) 모델 목록 조회가 성공했다. `gemini-3-flash`는 404(없는 모델)로 확정. 목록에 `gemini-3.6-flash`, `gemini-3.8-flash`, `gemini-3.5-transcribe`, `gemini-embedding-2`가 있다. `gemini-3.5-transcribe`는 목록상 `generateContent`를 지원한다고 나온다(공식 문서의 "Interactions API" 설명과 다름). 글자 한 단어짜리 `generateContent` 호출은 `gemini-3.5-transcribe`에서 성공했다(음성 호출은 미확인). `gemini-3.6-flash`와 `gemini-3.8-flash`는 4회씩 모두 503("high demand", 일시 혼잡)이라 **호출 성공을 아직 확인하지 못했다** — 키·결제 오류(400/403)는 아니다. 0단계 전에 재시도 필요.
+  - **2026-11-19 재확인**: 3.6·3.8 flash와 `gemini-4-hydrogen`은 계속 503, `gemini-4-neon`(11-18 GA, 유료 $3.00/$15.00)은 429 "quota 초과, 요금제·결제를 확인하라". 공식 문서상 3.6·3.8 flash는 둘 다 Stable·종료일 미정이고 API 목록에도 남아 있다(AI Studio 화면에서만 3.6이 빠짐). 11-17~19 공식 변경 기록에 모델 삭제·이름 변경은 없다. **(추정)** 이 키가 무료 등급이라 혼잡 시 503, 무료 한도가 없는 모델은 429가 난다. 사용자가 AI Studio에서 키 등급(유료/Tier 1)과 결제 연결을 확인해야 한다.
+  - `gemini-3.5-transcribe` 가격은 바뀌지 않았다. 공식 가격 페이지가 "입력 $2.00 또는 분당 $0.003 / 출력 $12.00 또는 분당 $0.002"로 두 단위를 함께 적는다(합계 분당 약 $0.005). 호출 방식은 공식 가이드 기준 Interactions API(`client.interactions.create`, REST `/v1beta/interactions`)다.
+  - **결제(유료 등급) 전환**: 결제 수단은 한 곳(Cloud Billing 계정)만 연결하면 된다. AI Studio의 API 키 화면 "Billing Tier" 칸의 "Set up billing"에서 결제 계정을 만들거나 고르고 선불(최소 $5) 또는 후불을 선택한다. 결제 계정이 연결된 프로젝트는 그 계정의 등급을 물려받는다. 같은 프로젝트라 Firebase도 Blaze로 바뀐다. Tier 1 지출 상한 $250, 10분 누적 지출 $10 초과 시 429. 선불 잔액이 0이면 402.
+  - **비용 상한 (2026-11-20 정리)**: 2026-11-20 기준 GCP·AI Studio·Firebase 모두 결제 미연결(사용자 확인). Gemini API는 선불을 고르면 충전액 이상 나가지 않는다. GCP 예산은 알림만 하고 사용을 막지 않는다. Cloud Run·Firestore·Storage에는 자동 상한이 없으므로 8단계 배포 때 Cloud Run 최대 인스턴스 수 제한과 예산 알림을 함께 설정한다. API 키는 서버에서만 쓰고 Generative Language API 전용으로 제한한다 **(추정: 키 유출이 비용 폭주의 주된 경로)**.
+  - 설치된 `google-genai` 1.52.0에는 `client.interactions`가 없어, Interactions 방식이 필요하면 복제 환경에서 SDK를 올려야 한다.
 - **비교 테스트 (2026-11-17 추가, 사용자 승인)** — 같은 녹음 파일로 실행하고 API 응답의 토큰 사용량을 함께 기록한다.
   - 범위(사용자 확정 2026-11-17): 우선 30분 이내 파일로만 비교한다. 30분 초과 처리(잘라 보내기)는 전용 전사 모델 채택이 정해진 뒤, 기존 파일을 ffmpeg로 이어 붙인 합성 파일로 확인한다(30분 넘는 실제 녹음 없음).
   - 테스트 파일(사용자 지정): `uploads/1차회의_stt선정_251105_160414.m4a` — 4분 36초, 4.3MB, 모노 AAC. 4인, 소규모 회의실에서 스마트폰 녹음. 길이가 짧아 "긴 회의 실패"와 전용 전사 모델의 30분 제한은 이 파일로 확인할 수 없다(긴 파일 별도 필요).
   - 요약의 `[cite: N]` 인용이 실제로 의미가 있는지 확인한다. 코드상으로는 전사문이 번호·화자·시각 없이 한 덩어리로 전달되어([services/upload_service.py:310](../../services/upload_service.py#L310)) AI가 인용할 번호가 없고, 화면([SummaryView.tsx](../../frontend/src/components/SummaryView.tsx))에도 인용을 처리하는 코드가 없다. 프롬프트의 `[cite_start]`([services/stt_service.py:246](../../services/stt_service.py#L246))는 의미 없는 문자열이다. 둘 다 수정 금지 영역이라 고치려면 승인이 필요하다.
   - 전사 3종: 로컬(faster-whisper + pyannote) / Gemini flash 전사(현재 방식) / `gemini-3.5-transcribe`(전용 모델, 사용 승인됨). 화자 구분 정확도, 오인식, 소요 시간, 비용을 비교한다. 전용 모델은 화자 분리 시 요청당 30분 제한, 3인 이상 화자 분리 "실험적", 별도 API(Interactions) 사용이라는 제약이 있다.
-  - 전사 외 2종: `gemini-3.6-flash` / `gemini-3.8-flash`. 같은 전사문으로 요약·회의록·할 일 추출을 만들어 품질, 토큰 사용량(생각 토큰 포함), 소요 시간을 비교한다. 공식 문서에 두 모델의 품질 비교는 없다.
+  - 전사 외 3종 (2026-11-19 `gemini-4-hydrogen` 추가, 사용자 결정): `gemini-3.6-flash` / `gemini-3.8-flash` / `gemini-4-hydrogen`. 같은 전사문으로 요약·회의록·할 일 추출을 만들어 품질, 토큰 사용량(생각 토큰 포함), 소요 시간을 비교한다. 공식 문서에 세 모델의 벤치마크 수치는 없다(설명 문구만 있음: 3.6 "더 빠르고 저렴", 3.8 "가장 똑똑한 Flash", hydrogen "일상 코딩·에이전트 작업의 속도와 효율").
+  - **예상 비용 (2026-11-19 공식 가격 기준, 사용량은 추정)** — 10분 4인 회의 1건 + 챗봇 5문항. 전사 외: 입력 26,300 / 출력 3,600 토큰(이전 추정값). Flash 전사: 음성 19,200(분당 1,920) + 지시문 500 입력, 출력 약 4,000 **(추정)**. 생각 토큰 미포함이라 실제는 더 나올 수 있다.
+
+    | 조합 (전사 + 전사 외) | 2026년 | 2027년부터 |
+    |---|---|---|
+    | 로컬 STT + 3.6/3.8 flash | $0.033 | $0.066 |
+    | 3.6/3.8 flash 전사 + 3.6/3.8 flash | $0.063 | $0.126 |
+    | `gemini-3.5-transcribe` + 3.6/3.8 flash | $0.083 | $0.116 |
+    | `gemini-3.5-transcribe` + `gemini-4-hydrogen` | $0.117 | $0.117 |
+    | hydrogen 전사 + hydrogen | $0.126 | $0.126 |
+
+    - 3.6과 3.8은 가격이 같다. 2027-01-01부터 두 모델 가격이 두 배가 되어 `gemini-4-hydrogen`과 같아진다($1.50/$7.50).
+    - `gemini-4-neon`($3.00/$15.00)은 무료 등급이 없고 hydrogen의 두 배라 후보에서 뺐다.
 - **건드릴 파일**: 비교용 스크립트 외에는 없음(검증만). `gemini-3.5-transcribe`를 정식 엔진으로 넣는 작업은 비교 결과로 채택이 정해진 뒤 별도로 한다. 로컬 STT가 정상이면 [app.py:20-23](../../app.py#L20-L23)의 주석 처리된 `diarization_service` import를 삭제한다.
 - **주의**: Gemini·OpenAI 비용이 소액 발생하고, 할 일 추출 에이전트가 캘린더에 일정을 등록할 수 있다. `local`이 깨져 있으면 그 수리가 최우선이 된다.
 
@@ -187,7 +205,26 @@
 
 ### 8단계 — 배포 + HTTPS
 
-방식이 정해지지 않았다(2절). 어느 방식이든 공통으로 필요한 것:
+**방식 확정 (사용자 2026-11-20)**: Firestore + Firebase Hosting + Cloud Run, 모두 `us-central1`. 이 PC의 Docker Desktop은 GenMinute에 쓰지 않는다(사용자의 다른 개인 앱용). VM·Cloudflare Tunnel·Tailscale 안은 버림(3절).
+
+**배포 방식 제안 (작성자 권고, 사용자 확인 전)**
+
+- **이미지**: 저장소 루트에 `Dockerfile`을 둔다. 서버용 패키지 목록(PyTorch·로컬 STT 제외, 1절 C)과 ffmpeg를 이미지에 포함한다. 로컬에 Docker가 없어도 `gcloud run deploy --source .`가 Cloud Build로 이미지를 만들어 Artifact Registry에 올린다.
+- **배포 순서**: 처음에는 PC에서 명령으로 수동 배포. 테스트가 안정되면 GitHub Actions로 `main` 머지 시 자동 배포(키 파일 대신 Workload Identity 연동 권장).
+- **화면**: `npm run build` → `firebase deploy --only hosting`. `firebase.json`에서 `/api/**`(및 업로드·로그인 경로)를 Cloud Run 서비스로 넘긴다. Flask의 화면 서빙([app.py:161-165](../../app.py#L161-L165))은 로컬 개발용으로 남긴다.
+- **비밀값**: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `FLASK_SECRET_KEY`는 Secret Manager에 넣고 Cloud Run 환경변수로 연결한다.
+- **Firebase 관리자 인증 (ADC 확정)**: 지금은 키 파일만 읽는다([services/firebase_service.py:34-44](../../services/firebase_service.py#L34-L44)). Cloud Run에서는 ADC(Application Default Credentials)로 초기화하도록 바꾸면 `firebase-adminsdk.json`을 서버에 올리지 않아도 된다(코드 수정 필요: 키 파일이 있으면 기존대로, 없으면 ADC + `FIREBASE_PROJECT_ID` 명시).
+  - 비용: IAM은 공식 문서상 "All use of Identity and Access Management API is free of charge." ID 토큰 검증도 공개키로 로컬에서 처리되어 별도 과금이 없다. ADC로 바꿔도 비용은 달라지지 않는다.
+  - Cloud Run 기본 서비스 계정은 프로젝트 편집자(Editor) 권한을 받을 수 있어, 공식 문서도 전용 서비스 계정을 권장한다. GenMinute 전용 서비스 계정에 필요한 권한만 준다.
+  - `.dockerignore`를 반드시 만든다. `firebase-adminsdk.json`, `.env`가 이미지에 들어가지 않게 한다(`.gitignore`에만 들어 있고 `.dockerignore`는 아직 없음, 2026-11-20 확인).
+  - **확정 (사용자 2026-11-20, 2절 17번)**: ADC + GenMinute 전용 서비스 계정. 키 파일을 Secret Manager에 넣는 안은 버림(3절).
+- **Cloud Run 설정**: 최소 인스턴스 0, 최대 인스턴스 2~3(비용 상한), 메모리는 0단계 실측 후 결정. 응답 후 처리 방식에 따라 과금 방식이 정해진다(3단계 설계와 연동).
+- **되돌리기**: 별도 테스트 환경 대신 Cloud Run 리비전(트래픽 없이 배포 후 태그 주소로 확인 → 전환)과 Hosting 미리보기 채널을 쓴다.
+- **주의**: Hosting을 거치는 요청은 60초 제한이 있다. 3단계(비동기화) 전에는 업로드 SSE가 Hosting 경로에서 끊긴다.
+
+어느 방식이든 공통으로 필요한 것:
+
+- **`.dockerignore` 작성 (필수, 사용자 확정 2026-11-20)**: `.env`, `firebase-adminsdk.json`, `uploads/`, `database/vector_db/`, `*.db`, `frontend/node_modules/`, `.git/`을 이미지에서 뺀다.
 
 - 세션 쿠키를 HTTPS 전용으로 설정.
 - `ALLOWED_ORIGINS`, Firebase 승인 도메인, 캘린더 리다이렉트 주소에 새 주소 추가(뒤 둘은 사용자가 콘솔에서 작업).
@@ -244,16 +281,17 @@
 
 | # | 항목 | 선택지 | 비고 |
 |---|---|---|---|
-| 1 | **배포 방식** | (가) GCP 가상 서버(VM) + Caddy + 도메인 — 코드 변경 거의 없음, 월 약 2~3만원 고정비 / (나) Cloud Run — HTTPS 자동·거의 무료, 대신 저장 3종 이전과 업로드 방식 변경 필요 / (다) 이 PC + Cloudflare Tunnel — 무료 + 도메인 비용, Windows용 실행기(`waitress`)로 교체 필요 | 작성자 권고는 "지금은 VM, Cloud Run은 정리 후". 사용자는 "생각해 보겠다"고 함. 8단계 전까지만 정하면 된다 |
+| 1 | ~~배포 방식~~ | **확정: Firestore + Firebase Hosting + Cloud Run, 모두 `us-central1`** (2026-11-20). 아래는 당시 선택지 | (가) GCP 가상 서버(VM) + Caddy + 도메인 — 코드 변경 거의 없음, 월 약 2~3만원 고정비 / (나) Cloud Run — HTTPS 자동·거의 무료, 대신 저장 3종 이전과 업로드 방식 변경 필요 / (다) 이 PC + Cloudflare Tunnel — 무료 + 도메인 비용, Windows용 실행기(`waitress`)로 교체 필요 | 작성자 권고는 "지금은 VM, Cloud Run은 정리 후". 사용자는 "생각해 보겠다"고 함. 8단계 전까지만 정하면 된다 |
 | 2 | ~~Supabase 코드 삭제~~ | **확정: 삭제** (2026-11-19) | 2단계에서 리팩토링 세션이 실행. 범위는 1절 2단계 |
 | 11 | ~~저장소·리전~~ | **확정: Firestore + Firebase Storage, 리전 `us-central1`** (2026-11-17) | 1절 "추가 단계 A". 배포 방식(1번)은 Cloud Run 방향 |
 | 12 | ~~캘린더·간트 순서~~ | **확정: 캘린더 → 간트** (2026-11-17) | 1절 "추가 단계 B". 단계 번호 배치는 미정 |
 | 13 | ~~추가 단계 A·B의 위치~~ | **확정: A(Firebase)는 2단계 직후, B(캘린더→간트)는 7단계 직후** (2026-11-19) | C(패키지 정리)는 작성자 제안대로 A와 함께 진행 — 미확인 |
 | 15 | **`self_query` 검색 방식 삭제** | 삭제 / 유지 | 사용자 보류(2026-11-19, 코드를 아직 보지 않음). 삭제 시 `langchain-classic`·`langchain-community`와 OpenAI 채팅 모델 연결이 함께 빠진다 |
+| 17 | ~~배포 시 Firebase 관리자 인증~~ | **확정: ADC + GenMinute 전용 서비스 계정** (2026-11-20) | 키 파일 + Secret Manager 안은 버림(3절). 로컬 개발은 기존 키 파일 유지 |
 | 16 | ~~2단계 범위 변경~~ | **확정: 서비스 안의 DB 호출을 repo로 옮기기** (2026-11-19) | Supabase 삭제와 함께 2단계에서 진행. 2-A(Firestore)는 repo 구현만 추가하면 되게 하는 것이 목적 |
-| 14 | **서버 임베딩** | EmbeddingGemma 2(양자화) / `gemini-embedding-2` API | 로컬 한국어 검색 비교 후 결정 |
+| 14 | **서버 임베딩** | EmbeddingGemma 2(양자화) / `gemini-embedding-2` API | 사용자 확정(2026-11-20): 두 모델을 로컬 한국어 검색으로 비교한 뒤 결과를 보고 결정. **2-A 전에 정해야 한다**(Firestore 벡터 색인의 차원이 이 선택으로 정해짐) |
 | 3 | **배포 환경의 STT 엔진** | Gemini STT 사용 / 로컬 STT 유지(이 경우 GPU 서버 필요) | VM(GPU 없는 사양)과 Cloud Run 모두 로컬 STT가 사실상 불가. Gemini STT는 원본이 Google API로 전송되어 프라이버시 목적과 관련된다 |
-| 4 | **도메인 보유 여부** | 있음 / 구매 / 무료 도메인 | VM과 Tunnel 방식에 필요. Cloud Run은 불필요 |
+| 4 | **도메인 보유 여부** | 있음 / 구매 / 무료 도메인 | Firebase Hosting의 무료 주소(`genminute-492814.web.app`)로 시작 가능. 자체 도메인은 선택 |
 | 5 | **0단계 실행 주체** | 작성자(Claude)가 `uploads/`의 짧은 녹음 사본으로 실행 / 사용자가 직접 실행 | 세 차례 물었으나 답 없음. 비용과 캘린더 등록 가능성 때문에 승인이 필요하다 |
 | 6 | ~~브랜치 운영~~ | **확정: `cleanup`에서 작업하고 단계마다 `main`에 합치기** (2026-11-17) | |
 | 7 | ~~서버 보관 기간 값~~ | **확정: 기본 14일 + 회의별 "원본 지금 삭제" 버튼** (2026-11-17) | 기간은 `config.py` 설정값. 저장 리전은 `us-central1`로 확정(11번) |
@@ -270,6 +308,9 @@
 | 원본 파일을 녹음한 기기에만 저장 | 다른 기기에서 재생, 공유받은 사람의 재생, 브라우저 데이터 삭제 후 재생이 모두 불가능해진다. STT가 서버에서 돌아 파일은 어차피 서버에 올라와야 한다. 대신 "기기 저장 버튼 + 서버 보관 기간"으로 대체 |
 | 자체 서명 인증서로 HTTPS | 기기마다 경고가 뜨고 로그인·PWA가 불안정하다 |
 | Cloud Storage를 디스크처럼 연결해 SQLite·ChromaDB를 그 위에 두기 | 파일 잠금이 안 되어 DB가 깨질 수 있다. 원본 파일 보관에만 쓸 수 있다 |
+| 이 PC + Docker Desktop + Tailscale/Cloudflare Tunnel로 배포 | PC를 계속 켜 둬야 하고, Firebase Hosting과 함께 쓰면 주소가 둘로 나뉘어 쿠키·CORS 설정이 늘어난다. 이 PC는 Intel GPU라 Docker 안에서 GPU 가속도 어렵다. Docker Desktop은 사용자의 다른 개인 앱용으로만 쓰기로 함(2026-11-20) |
+| Firebase 키 파일을 Secret Manager에 넣어 Cloud Run에 파일로 연결 | 코드 수정은 없지만 비밀값을 읽으려면 ADC가 어차피 필요하고, 만료 없는 관리자 키가 서버에 하나 더 생긴다. 권한도 좁힐 수 없다. ADC로 확정(2026-11-20) |
+| GCP VM + Docker | 월 고정비(추정 2~3만원). Firestore 이전이 필요 없다는 장점은 있으나 Cloud Run 조합을 선택(2026-11-20) |
 | Supabase를 배포 DB로 사용 | 2026-11-19 Firestore로 결정. Supabase 코드는 삭제하고 필요해지면 새로 작성(사용자 결정) |
 | 모바일 녹음 대응(녹음 조각 단위 전송, 이어 올리기, 화면 꺼짐 방지) | 주 사용 환경이 웹(PC)이다. 모바일은 기본 녹음 앱으로 녹음한 뒤 업로드하도록 유도하기로 사용자가 결정 |
 | PWA | 모바일이 "업로드와 열람" 용도면 얻는 것이 홈 화면 아이콘과 알림 정도다. 화면이 꺼지면 녹음이 멈추는 제약은 PWA로 해결되지 않는다. 보류 |
